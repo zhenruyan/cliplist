@@ -1,7 +1,7 @@
 # Cliplist configuration
 # Save to: ~/.config/cliplist/config.toml
 
-max_history = 100
+max_history = 100  # max items shown in popup (not a storage limit)
 poll_interval = "500ms"
 # db_path = "~/.config/cliplist/cliplist.db"
 # image_dir = "~/.local/share/cliplist/images"

@@ -105,6 +105,32 @@ static void addClipRow(const char *text, int id) {
     gtk_widget_show_all(row);  // show row AND its children
 }
 
+static void addImageRow(const char *imagePath, int id) {
+    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file_at_scale(imagePath, 48, 48, TRUE, NULL);
+
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+
+    if (pixbuf) {
+        GtkWidget *image = gtk_image_new_from_pixbuf(pixbuf);
+        g_object_unref(pixbuf);
+        gtk_box_pack_start(GTK_BOX(hbox), image, FALSE, FALSE, 4);
+    } else {
+        GtkWidget *ph = gtk_label_new("[img]");
+        gtk_box_pack_start(GTK_BOX(hbox), ph, FALSE, FALSE, 4);
+    }
+
+    GtkWidget *label = gtk_label_new("(image)");
+    gtk_label_set_xalign(GTK_LABEL(label), 0);
+    gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
+
+    GtkWidget *row = gtk_list_box_row_new();
+    gtk_container_add(GTK_CONTAINER(row), hbox);
+    g_object_set_data(G_OBJECT(row), "clip-id", GINT_TO_POINTER(id));
+    gtk_list_box_insert(GTK_LIST_BOX(g_listbox), row, -1);
+    gtk_widget_show_all(row);
+}
+
 static void selectFirstRow() {
     GtkListBoxRow *first = gtk_list_box_get_row_at_index(GTK_LIST_BOX(g_listbox), 0);
     if (first) {
@@ -200,6 +226,16 @@ func PopupVisible() bool {
 	return C.isPopupVisible() != 0
 }
 
+// popupMaxDisplay is the max number of clips shown when search is empty.
+var popupMaxDisplay = 200
+
+// SetPopupMaxDisplay sets the maximum number of clips shown in the popup.
+func SetPopupMaxDisplay(n int) {
+	if n > 0 {
+		popupMaxDisplay = n
+	}
+}
+
 //export goSearchChanged
 func goSearchChanged() {
 	if popupStore == nil {
@@ -211,7 +247,7 @@ func goSearchChanged() {
 	var clips []store.Clip
 	var err error
 	if q == "" {
-		clips, err = popupStore.List(200)
+		clips, err = popupStore.List(popupMaxDisplay)
 	} else {
 		clips, err = popupStore.Search(q, 50)
 	}
@@ -224,12 +260,15 @@ func goSearchChanged() {
 	C.clearList()
 	for _, c := range clips {
 		if c.IsImage {
-			continue
+			cPath := C.CString(c.ImagePath)
+			C.addImageRow(cPath, C.int(c.ID))
+			C.free(unsafe.Pointer(cPath))
+		} else {
+			label := clipDisplayLabel(c)
+			cLabel := C.CString(label)
+			C.addClipRow(cLabel, C.int(c.ID))
+			C.free(unsafe.Pointer(cLabel))
 		}
-		label := clipDisplayLabel(c)
-		cLabel := C.CString(label)
-		C.addClipRow(cLabel, C.int(c.ID))
-		C.free(unsafe.Pointer(cLabel))
 	}
 	C.selectFirstRow()
 }

@@ -47,7 +47,7 @@ static void initSettingsWindow(
 
     int row = 0;
 
-    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Max History:"), 0, row, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), gtk_label_new("Max Display History:"), 0, row, 1, 1);
     w_max_history = gtk_spin_button_new_with_range(10, 100000, 10);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w_max_history), maxHistory);
     gtk_grid_attach(GTK_GRID(grid), w_max_history, 1, row, 1, 1);

@@ -22,11 +22,10 @@ type Clip struct {
 }
 
 type Store struct {
-	db         *sql.DB
-	maxHistory int
+	db *sql.DB
 }
 
-func New(dbPath string, maxHistory int) (*Store, error) {
+func New(dbPath string) (*Store, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
@@ -37,7 +36,7 @@ func New(dbPath string, maxHistory int) (*Store, error) {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	s := &Store{db: db, maxHistory: maxHistory}
+	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -67,7 +66,7 @@ func (s *Store) migrate() error {
 	return err
 }
 
-// Add inserts a new clip and evicts old non-fav entries beyond maxHistory.
+// Add inserts a new clip (skipping duplicates of the most recent entry).
 func (s *Store) Add(c *Clip) error {
 	// check duplicate: if the most recent clip has the same content, skip
 	var lastContent sql.NullString
@@ -86,12 +85,6 @@ func (s *Store) Add(c *Clip) error {
 	if err != nil {
 		return err
 	}
-
-	// evict old non-fav entries
-	_, _ = s.db.Exec(`
-		DELETE FROM clips WHERE is_fav = 0 AND id NOT IN (
-			SELECT id FROM clips ORDER BY created_at DESC LIMIT ?
-		)`, s.maxHistory)
 
 	return nil
 }

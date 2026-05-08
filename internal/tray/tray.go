@@ -35,6 +35,33 @@ static void addClipItem(const char *label, int index) {
     gtk_widget_show(item);
 }
 
+static void addImageMenuItem(const char *imagePath, const char *labelText, int index) {
+    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file_at_scale(imagePath, 24, 24, TRUE, NULL);
+
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+
+    if (pixbuf) {
+        GtkWidget *image = gtk_image_new_from_pixbuf(pixbuf);
+        g_object_unref(pixbuf);
+        gtk_box_pack_start(GTK_BOX(hbox), image, FALSE, FALSE, 4);
+    } else {
+        GtkWidget *ph = gtk_label_new("[img]");
+        gtk_box_pack_start(GTK_BOX(hbox), ph, FALSE, FALSE, 4);
+    }
+
+    GtkWidget *label = gtk_label_new(labelText);
+    gtk_label_set_xalign(GTK_LABEL(label), 0);
+    gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    gtk_label_set_max_width_chars(GTK_LABEL(label), 50);
+    gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
+
+    GtkWidget *item = gtk_menu_item_new();
+    gtk_container_add(GTK_CONTAINER(item), hbox);
+    g_signal_connect(item, "activate", G_CALLBACK(onMenuItemActivate), GINT_TO_POINTER(index));
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    gtk_widget_show_all(item);
+}
+
 static void addSearchItem(const char *label) {
     GtkWidget *item = gtk_menu_item_new_with_label(label);
     g_signal_connect(item, "activate", G_CALLBACK(onSearchActivate), NULL);
@@ -80,6 +107,7 @@ static void stopGTK() { gtk_main_quit(); }
 import "C"
 import (
 	"log"
+	"path/filepath"
 	"sync"
 	"unsafe"
 
@@ -88,8 +116,10 @@ import (
 
 // MenuClip represents a clip entry in the tray menu.
 type MenuClip struct {
-	ID      int64
-	Content string
+	ID        int64
+	Content   string
+	IsImage   bool
+	ImagePath string
 }
 
 // Tray manages the system tray icon and popup menu.
@@ -159,10 +189,19 @@ func (t *Tray) rebuildMenu() {
 		C.free(unsafe.Pointer(label))
 	} else {
 		for i, c := range clips {
-			lbl := truncate(c.Content, 80)
-			cLbl := C.CString(lbl)
-			C.addClipItem(cLbl, C.int(i))
-			C.free(unsafe.Pointer(cLbl))
+			if c.IsImage {
+				fname := filepath.Base(c.ImagePath)
+				cPath := C.CString(c.ImagePath)
+				cLabel := C.CString(fname)
+				C.addImageMenuItem(cPath, cLabel, C.int(i))
+				C.free(unsafe.Pointer(cPath))
+				C.free(unsafe.Pointer(cLabel))
+			} else {
+				lbl := truncate(c.Content, 80)
+				cLbl := C.CString(lbl)
+				C.addClipItem(cLbl, C.int(i))
+				C.free(unsafe.Pointer(cLbl))
+			}
 		}
 	}
 
@@ -200,8 +239,10 @@ func onMenuItemActivate(item *C.GtkMenuItem, data C.gpointer) {
 	clip := tray.clips[idx]
 	tray.mu.Unlock()
 
-	if err := xmonitor.SetClipboard(clip.Content); err != nil {
-		log.Printf("[tray] set clipboard: %v", err)
+	if !clip.IsImage && clip.Content != "" {
+		if err := xmonitor.SetClipboard(clip.Content); err != nil {
+			log.Printf("[tray] set clipboard: %v", err)
+		}
 	}
 
 	select {

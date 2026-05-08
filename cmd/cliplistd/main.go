@@ -34,12 +34,12 @@ func main() {
 	os.MkdirAll(config.DefaultConfigDir(), 0755)
 	os.MkdirAll(cfg.ImageDir, 0755)
 
-	db, err := store.New(cfg.DBPath, cfg.MaxHistory)
+	db, err := store.New(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}
 	defer db.Close()
-	log.Printf("store: %s (max: %d)", cfg.DBPath, cfg.MaxHistory)
+	log.Printf("store: %s", cfg.DBPath)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -95,6 +95,7 @@ func main() {
 	tr := tray.New()
 	tray.SetCurrent(tr)
 	tray.SetPopupStore(db)
+	tray.SetPopupMaxDisplay(cfg.MaxHistory)
 
 	go handleTrayEvents(tr, db, newClipCh, cfg)
 
@@ -129,7 +130,12 @@ func main() {
 	clips, _ := db.List(15)
 	var menuClips []tray.MenuClip
 	for _, c := range clips {
-		menuClips = append(menuClips, tray.MenuClip{ID: c.ID, Content: c.Content})
+		menuClips = append(menuClips, tray.MenuClip{
+			ID:        c.ID,
+			Content:   c.Content,
+			IsImage:   c.IsImage,
+			ImagePath: c.ImagePath,
+		})
 	}
 	tr.SetClips(menuClips)
 
@@ -177,8 +183,10 @@ func refreshTrayMenu(tr *tray.Tray, db *store.Store) {
 	var menuClips []tray.MenuClip
 	for _, c := range clips {
 		menuClips = append(menuClips, tray.MenuClip{
-			ID:      c.ID,
-			Content: c.Content,
+			ID:        c.ID,
+			Content:   c.Content,
+			IsImage:   c.IsImage,
+			ImagePath: c.ImagePath,
 		})
 	}
 	tr.UpdateClips(menuClips)
@@ -196,6 +204,7 @@ func openSettings(cfg *config.Config) {
 		cfg.Hotkey.Key,
 		func(maxHistory int, pollInterval, pasteDelay string, ignoreWS, autoStart bool, maxLengthKB int, hotkeyMods, hotkeyKey string) {
 			cfg.MaxHistory = maxHistory
+			tray.SetPopupMaxDisplay(maxHistory)
 			cfg.PollIntervalStr = pollInterval
 			if d, err := time.ParseDuration(pollInterval); err == nil {
 				cfg.PollInterval = d
