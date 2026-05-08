@@ -452,7 +452,7 @@ static GtkWidget *addSidebarSection(GtkWidget *box, const char *title) {
     gtk_box_pack_start(GTK_BOX(box), sep, FALSE, FALSE, 0);
 
     GtkWidget *lbl = gtk_label_new(NULL);
-    char markup[64];
+    char markup[128];
     snprintf(markup, sizeof(markup),
         "<span font='9' foreground='#888' letter_spacing='512'>%s</span>", title);
     gtk_label_set_markup(GTK_LABEL(lbl), markup);
