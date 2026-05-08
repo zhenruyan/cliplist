@@ -13,7 +13,7 @@ static GtkWidget *mgrSidebar      = NULL;
 static GtkWidget *tagSidebarBox   = NULL;
 static GtkWidget *sourceSidebarBox = NULL;
 static GtkWidget *mgrSearch       = NULL;
-static GtkWidget *mgrGrid         = NULL; // Now a GtkListBox
+static GtkWidget *mgrGrid         = NULL; 
 static GtkWidget *mgrEmpty        = NULL;
 static GtkWidget *activeBtn       = NULL;
 
@@ -58,17 +58,7 @@ static const char *MANAGER_CSS =
 ".detail-win { background: #ffffff; }\n"
 ".detail-header { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 12px; color: #888; }\n";
 
-/* ── Declarations ────────────────────────────────────────────── */
-
-static void showDetailDialog(GtkWidget *row);
-static gboolean onRowEvt(GtkWidget *widget, GdkEventButton *ev, gpointer data);
-static void onHeartClick(GtkButton *btn, gpointer row);
-static void onDelClick(GtkButton *btn, gpointer row);
-static void onAddTagClick(GtkButton *btn, gpointer id);
-static gboolean onTagRemove(GtkWidget *eb, GdkEventButton *ev, gpointer d);
-static void onCatClick(GtkButton *btn, gpointer id);
-static void onTagGroupClick(GtkButton *btn, gpointer d);
-static void onSourceGroupClick(GtkButton *btn, gpointer d);
+/* ── Helpers ─────────────────────────────────────────────────── */
 
 static const char *TAG_CLASSES[] = { "tag-blue", "tag-green", "tag-orange", "tag-red", "tag-purple", "tag-teal" };
 static const char* tagColorClass(const char *tag) {
@@ -76,17 +66,7 @@ static const char* tagColorClass(const char *tag) {
     return TAG_CLASSES[h % 6];
 }
 
-static GtkWidget *addSidebarSection(GtkWidget *box, const char *title) {
-    GtkWidget *l = gtk_label_new(title);
-    gtk_style_context_add_class(gtk_widget_get_style_context(l), "section-label");
-    gtk_widget_set_halign(l, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(box), l, FALSE, FALSE, 0);
-    GtkWidget *c = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_start(GTK_BOX(box), c, FALSE, FALSE, 0);
-    return c;
-}
-
-/* ── UI Components ───────────────────────────────────────────── */
+/* ── Internal Callbacks ──────────────────────────────────────── */
 
 static void showDetailDialog(GtkWidget *row) {
     int id = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row), "clip-id"));
@@ -139,11 +119,14 @@ static void showDetailDialog(GtkWidget *row) {
     gtk_widget_show_all(win);
 }
 
-/* ── Callbacks ───────────────────────────────────────────────── */
-
 static gboolean onRowEvt(GtkWidget *widget, GdkEventButton *ev, gpointer data) {
     if (ev->type == GDK_2BUTTON_PRESS && ev->button == 1) { showDetailDialog(widget); return TRUE; }
     if (ev->button == 3) { goCardClicked(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "clip-id"))); return TRUE; }
+    return FALSE;
+}
+
+static gboolean onWinKey(GtkWidget *w, GdkEventKey *ev, gpointer d) {
+    if (ev->keyval == GDK_KEY_Escape) { gtk_main_quit(); return TRUE; }
     return FALSE;
 }
 
@@ -198,7 +181,17 @@ static void onSourceGroupClick(GtkButton *btn, gpointer d) {
     goSourceGroupChanged((char *)g_object_get_data(G_OBJECT(btn), "source-name"));
 }
 
-/* ── Main Builders ───────────────────────────────────────────── */
+static GtkWidget *addSidebarSection(GtkWidget *box, const char *title) {
+    GtkWidget *l = gtk_label_new(title);
+    gtk_style_context_add_class(gtk_widget_get_style_context(l), "section-label");
+    gtk_widget_set_halign(l, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(box), l, FALSE, FALSE, 0);
+    GtkWidget *c = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(box), c, FALSE, FALSE, 0);
+    return c;
+}
+
+/* ── Exported API (manager.h) ────────────────────────────────── */
 
 void initManagerWindow(void) {
     GtkCssProvider *css = gtk_css_provider_new();
@@ -264,94 +257,11 @@ void initManagerWindow(void) {
     gtk_widget_hide(mgrWin);
 }
 
-/* ── Add List Row ── */
-
-void addClipCard(int id, const char *text, int textLen, int isImg, const char *imgPath, int isFav, const char *tags, const char *srcApp, const char *timeStr) {
-    GtkWidget *row_box = gtk_event_box_new();
-    gtk_style_context_add_class(gtk_widget_get_style_context(row_box), "clip-row");
-    gtk_widget_set_size_request(row_box, -1, 60); // 严格锁死 60px 行高
-
-    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 15);
-    gtk_widget_set_valign(hbox, GTK_ALIGN_CENTER);
-    gtk_container_add(GTK_CONTAINER(row_box), hbox);
-
-    /* Data binding */
-    g_object_set_data(G_OBJECT(row_box), "clip-id", GINT_TO_POINTER(id));
-    g_object_set_data(G_OBJECT(row_box), "clip-is-image", GINT_TO_POINTER(isImg));
-    g_object_set_data(G_OBJECT(row_box), "is-fav", GINT_TO_POINTER(isFav));
-    if(text) g_object_set_data_full(G_OBJECT(row_box), "clip-text", g_strndup(text, textLen), g_free);
-    if(imgPath) g_object_set_data_full(G_OBJECT(row_box), "clip-image-path", g_strdup(imgPath), g_free);
-    if(srcApp) g_object_set_data_full(G_OBJECT(row_box), "clip-source", g_strdup(srcApp), g_free);
-
-    /* 1. Favorite */
-    GtkWidget *fav = gtk_button_new_with_label(isFav ? "❤️" : "🤍");
-    gtk_style_context_add_class(gtk_widget_get_style_context(fav), "btn-icon");
-    gtk_style_context_add_class(gtk_widget_get_style_context(fav), "btn-fav");
-    if(isFav) gtk_style_context_add_class(gtk_widget_get_style_context(fav), "active");
-    g_signal_connect(fav, "clicked", G_CALLBACK(onHeartClick), row_box);
-    gtk_box_pack_start(GTK_BOX(hbox), fav, FALSE, FALSE, 0);
-
-    /* 2. Content Preview (STRICT 1 LINE) */
-    GtkWidget *pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_widget_set_size_request(pBox, 350, 40); // 锁死预览区宽度和高度
-    gtk_box_pack_start(GTK_BOX(hbox), pBox, FALSE, FALSE, 0);
-
-    if (isImg && imgPath) {
-        GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(imgPath, 50, 40, TRUE, NULL);
-        if(pb){ gtk_box_pack_start(GTK_BOX(pBox), gtk_image_new_from_pixbuf(pb), FALSE, FALSE, 0); g_object_unref(pb); }
-        gtk_box_pack_start(GTK_BOX(pBox), gtk_label_new("(Image)"), FALSE, FALSE, 0);
-    } else if (text) {
-        GtkWidget *lbl = gtk_label_new(text);
-        gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
-        gtk_label_set_lines(GTK_LABEL(lbl), 1); // 强制锁死 1 行
-        gtk_label_set_max_width_chars(GTK_LABEL(lbl), 50);
-        gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "row-content-text");
-        gtk_box_pack_start(GTK_BOX(pBox), lbl, TRUE, TRUE, 0);
-    }
-
-    /* 3. Tags (Single line box) */
-    GtkWidget *tBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_size_request(tBox, 200, 30);
-    gtk_box_pack_start(GTK_BOX(hbox), tBox, TRUE, TRUE, 0);
-    if(tags && tags[0]){
-        char **list = g_strsplit(tags, ",", -1);
-        for(int i=0; list[i] && i < 3; i++) if(list[i][0]){ // Max 3 tags in list
-            GtkWidget *eb = gtk_event_box_new();
-            GtkWidget *tl = gtk_label_new(list[i]);
-            gtk_style_context_add_class(gtk_widget_get_style_context(eb), "tag-pill");
-            gtk_style_context_add_class(gtk_widget_get_style_context(eb), tagColorClass(list[i]));
-            gtk_container_add(GTK_CONTAINER(eb), tl);
-            g_object_set_data(G_OBJECT(eb), "clip-id", GINT_TO_POINTER(id));
-            g_object_set_data_full(G_OBJECT(eb), "tag-name", g_strdup(list[i]), g_free);
-            g_signal_connect(eb, "button-press-event", G_CALLBACK(onTagRemove), NULL);
-            gtk_box_pack_start(GTK_BOX(tBox), eb, FALSE, FALSE, 0);
-        }
-        g_strfreev(list);
-    }
-    GtkWidget *at = gtk_button_new_with_label("+");
-    gtk_style_context_add_class(gtk_widget_get_style_context(at), "btn-icon");
-    g_signal_connect(at, "clicked", G_CALLBACK(onAddTagClick), GINT_TO_POINTER(id));
-    gtk_box_pack_start(GTK_BOX(tBox), at, FALSE, FALSE, 0);
-
-    /* 4. Info (Right Aligned) */
-    char buf[128]; snprintf(buf, 128, "%s  \xc2\xb7  %s", timeStr ? timeStr : "", srcApp ? srcApp : "Unknown");
-    GtkWidget *il = gtk_label_new(buf);
-    gtk_style_context_add_class(gtk_widget_get_style_context(il), "row-info");
-    gtk_box_pack_start(GTK_BOX(hbox), il, FALSE, FALSE, 0);
-
-    /* 5. Delete */
-    GtkWidget *del = gtk_button_new_with_label("🗑️");
-    gtk_style_context_add_class(gtk_widget_get_style_context(del), "btn-icon");
-    gtk_style_context_add_class(gtk_widget_get_style_context(del), "btn-del");
-    g_signal_connect(del, "clicked", G_CALLBACK(onDelClick), row_box);
-    gtk_box_pack_start(GTK_BOX(hbox), del, FALSE, FALSE, 0);
-
-    g_signal_connect(row_box, "button-press-event", G_CALLBACK(onRowEvt), NULL);
-    gtk_list_box_insert(GTK_LIST_BOX(mgrGrid), row_box, -1);
-    gtk_widget_show_all(row_box);
-}
-
-/* ── Go Callbacks ── */
+void showManagerWindow(void) { gtk_widget_show_all(mgrWin); gtk_window_present(GTK_WINDOW(mgrWin)); }
+void clearGrid(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(mgrGrid)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); gtk_widget_hide(mgrEmpty); }
+void showEmpty(void) { gtk_widget_show(mgrEmpty); }
+void clearTagSidebar(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(tagSidebarBox)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); }
+void clearSourceSidebar(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(sourceSidebarBox)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); }
 
 void addTagButton(const char *tag) {
     char b[64]; snprintf(b, 64, "# %s", tag);
@@ -376,11 +286,85 @@ void addSourceButton(const char *src) {
     gtk_widget_show_all(btn);
 }
 
-void showManagerWindow(void) { gtk_widget_show_all(mgrWin); gtk_window_present(GTK_WINDOW(mgrWin)); }
-void clearGrid(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(mgrGrid)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); gtk_widget_hide(mgrEmpty); }
-void showEmpty(void) { gtk_widget_show(mgrEmpty); }
-void clearTagSidebar(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(tagSidebarBox)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); }
-void clearSourceSidebar(void) { GList *l=gtk_container_get_children(GTK_CONTAINER(sourceSidebarBox)); for(GList *i=l;i;i=i->next) gtk_widget_destroy(GTK_WIDGET(i->data)); g_list_free(l); }
+void addClipCard(int id, const char *text, int textLen, int isImg, const char *imgPath, int isFav, const char *tags, const char *srcApp, const char *timeStr) {
+    GtkWidget *row_box = gtk_event_box_new();
+    gtk_style_context_add_class(gtk_widget_get_style_context(row_box), "clip-row");
+    gtk_widget_set_size_request(row_box, -1, 60); 
+
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 15);
+    gtk_widget_set_valign(hbox, GTK_ALIGN_CENTER);
+    gtk_container_add(GTK_CONTAINER(row_box), hbox);
+
+    g_object_set_data(G_OBJECT(row_box), "clip-id", GINT_TO_POINTER(id));
+    g_object_set_data(G_OBJECT(row_box), "clip-is-image", GINT_TO_POINTER(isImg));
+    g_object_set_data(G_OBJECT(row_box), "is-fav", GINT_TO_POINTER(isFav));
+    if(text) g_object_set_data_full(G_OBJECT(row_box), "clip-text", g_strndup(text, textLen), g_free);
+    if(imgPath) g_object_set_data_full(G_OBJECT(row_box), "clip-image-path", g_strdup(imgPath), g_free);
+    if(srcApp) g_object_set_data_full(G_OBJECT(row_box), "clip-source", g_strdup(srcApp), g_free);
+
+    GtkWidget *fav = gtk_button_new_with_label(isFav ? "❤️" : "🤍");
+    gtk_style_context_add_class(gtk_widget_get_style_context(fav), "btn-icon");
+    gtk_style_context_add_class(gtk_widget_get_style_context(fav), "btn-fav");
+    if(isFav) gtk_style_context_add_class(gtk_widget_get_style_context(fav), "active");
+    g_signal_connect(fav, "clicked", G_CALLBACK(onHeartClick), row_box);
+    gtk_box_pack_start(GTK_BOX(hbox), fav, FALSE, FALSE, 0);
+
+    GtkWidget *pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_size_request(pBox, 400, 40); 
+    gtk_box_pack_start(GTK_BOX(hbox), pBox, FALSE, FALSE, 0);
+
+    if (isImg && imgPath) {
+        GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(imgPath, 50, 40, TRUE, NULL);
+        if(pb){ gtk_box_pack_start(GTK_BOX(pBox), gtk_image_new_from_pixbuf(pb), FALSE, FALSE, 0); g_object_unref(pb); }
+        GtkWidget *l = gtk_label_new("(Image)");
+        gtk_style_context_add_class(gtk_widget_get_style_context(l), "row-content-text");
+        gtk_box_pack_start(GTK_BOX(pBox), l, FALSE, FALSE, 0);
+    } else if (text) {
+        GtkWidget *lbl = gtk_label_new(text);
+        gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
+        gtk_label_set_lines(GTK_LABEL(lbl), 1); 
+        gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "row-content-text");
+        gtk_box_pack_start(GTK_BOX(pBox), lbl, TRUE, TRUE, 0);
+    }
+
+    GtkWidget *tBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), tBox, TRUE, TRUE, 0);
+    if(tags && tags[0]){
+        char **list = g_strsplit(tags, ",", -1);
+        for(int i=0; list[i] && i < 3; i++) if(list[i][0]){
+            GtkWidget *eb = gtk_event_box_new();
+            GtkWidget *tl = gtk_label_new(list[i]);
+            gtk_style_context_add_class(gtk_widget_get_style_context(eb), "tag-pill");
+            gtk_style_context_add_class(gtk_widget_get_style_context(eb), tagColorClass(list[i]));
+            gtk_container_add(GTK_CONTAINER(eb), tl);
+            g_object_set_data(G_OBJECT(eb), "clip-id", GINT_TO_POINTER(id));
+            g_object_set_data_full(G_OBJECT(eb), "tag-name", g_strdup(list[i]), g_free);
+            g_signal_connect(eb, "button-press-event", G_CALLBACK(onTagRemove), NULL);
+            gtk_box_pack_start(GTK_BOX(tBox), eb, FALSE, FALSE, 0);
+        }
+        g_strfreev(list);
+    }
+    GtkWidget *at = gtk_button_new_with_label("+");
+    gtk_style_context_add_class(gtk_widget_get_style_context(at), "btn-icon");
+    g_signal_connect(at, "clicked", G_CALLBACK(onAddTagClick), GINT_TO_POINTER(id));
+    gtk_box_pack_start(GTK_BOX(tBox), at, FALSE, FALSE, 0);
+
+    char buf[128]; snprintf(buf, 128, "%s  \xc2\xb7  %s", timeStr ? timeStr : "", srcApp ? srcApp : "Unknown");
+    GtkWidget *il = gtk_label_new(buf);
+    gtk_style_context_add_class(gtk_widget_get_style_context(il), "row-info");
+    gtk_box_pack_start(GTK_BOX(hbox), il, FALSE, FALSE, 0);
+
+    GtkWidget *del = gtk_button_new_with_label("🗑️");
+    gtk_style_context_add_class(gtk_widget_get_style_context(del), "btn-icon");
+    gtk_style_context_add_class(gtk_widget_get_style_context(del), "btn-del");
+    g_signal_connect(del, "clicked", G_CALLBACK(onDelClick), row_box);
+    gtk_box_pack_start(GTK_BOX(hbox), del, FALSE, FALSE, 0);
+
+    g_signal_connect(row_box, "button-press-event", G_CALLBACK(onRowEvt), NULL);
+    gtk_list_box_insert(GTK_LIST_BOX(mgrGrid), row_box, -1);
+    gtk_widget_show_all(row_box);
+}
+
 gboolean rebuildGridIdle(gpointer d) { goRebuildGrid(); return FALSE; }
 gboolean rebuildTagSidebarIdle(gpointer d) { goRebuildTagSidebar(); return FALSE; }
 gboolean rebuildSourceSidebarIdle(gpointer d) { goRebuildSourceSidebar(); return FALSE; }
