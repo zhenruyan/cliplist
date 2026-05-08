@@ -33,7 +33,8 @@ static const char *MANAGER_CSS =
 "/* ── card (on EventBox) ──────────────── */\n"
 ".clip-card {\n"
 "  background: #ffffff; border: 1px solid #e0e0e6;\n"
-"  border-radius: 10px; padding: 3px;\n"
+"  border-radius: 10px;\n"
+"  min-width: 240px; min-height: 260px;\n"
 "}\n"
 ".clip-card:hover {\n"
 "  border-color: #c8c8d4;\n"
@@ -628,10 +629,13 @@ void addClipCard(int id, const char *text, int textLen,
      */
     GtkWidget *card = gtk_event_box_new();
     gtk_style_context_add_class(gtk_widget_get_style_context(card), "clip-card");
-    gtk_widget_set_size_request(card, 240, 260);
 
     GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
     gtk_container_add(GTK_CONTAINER(card), inner);
+    gtk_widget_set_margin_top(inner, 3);
+    gtk_widget_set_margin_bottom(inner, 3);
+    gtk_widget_set_margin_start(inner, 3);
+    gtk_widget_set_margin_end(inner, 3);
 
     /* store all data on the EventBox */
     g_object_set_data(G_OBJECT(card), "clip-id",       GINT_TO_POINTER(id));
