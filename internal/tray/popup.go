@@ -73,6 +73,7 @@ static void initPopup() {
     gtk_entry_set_placeholder_text(GTK_ENTRY(g_search), "Search clips...");
     gtk_box_pack_start(GTK_BOX(vbox), g_search, FALSE, FALSE, 0);
     g_signal_connect(g_search, "search-changed", G_CALLBACK(on_search_changed), NULL);
+    g_signal_connect(g_search, "key-press-event", G_CALLBACK(on_key_press), NULL);
 
     GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
