@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -69,7 +70,6 @@ func (s *Store) migrate() error {
 	if err != nil {
 		return err
 	}
-	// add tags column for existing databases
 	s.db.Exec(`ALTER TABLE clips ADD COLUMN tags TEXT DEFAULT ''`)
 	return nil
 }
@@ -83,7 +83,6 @@ func scanClip(sc interface{ Scan(...interface{}) error }) (Clip, error) {
 	return c, err
 }
 
-// Add inserts a new clip (skipping duplicates of the most recent entry).
 func (s *Store) Add(c *Clip) error {
 	var lastContent sql.NullString
 	err := s.db.QueryRow(
@@ -115,7 +114,6 @@ func (s *Store) List(limit int) ([]Clip, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var clips []Clip
 	for rows.Next() {
 		c, err := scanClip(rows)
@@ -153,7 +151,6 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var clips []Clip
 	for rows.Next() {
 		c, err := scanClip(rows)
@@ -165,7 +162,6 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 	return clips, rows.Err()
 }
 
-// ToggleFav toggles the favorite status of a clip.
 func (s *Store) ToggleFav(id int64) error {
 	_, err := s.db.Exec(`UPDATE clips SET is_fav = NOT is_fav WHERE id = ?`, id)
 	return err
@@ -208,13 +204,67 @@ func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, er
 	return clips, rows.Err()
 }
 
-// SetTags sets the tags for a clip.
+// ListByTag returns clips that have the given tag.
+func (s *Store) ListByTag(tag string, limit int) ([]Clip, error) {
+	pattern := "%," + tag + ",%"
+	q := `SELECT ` + selectCols + ` FROM clips o
+	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      WHERE (',' || o.tags || ',') LIKE ?
+	      ORDER BY o.created_at DESC`
+	args := []interface{}{pattern}
+	if limit > 0 {
+		q += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var clips []Clip
+	for rows.Next() {
+		c, err := scanClip(rows)
+		if err != nil {
+			return nil, err
+		}
+		clips = append(clips, c)
+	}
+	return clips, rows.Err()
+}
+
+// GetAllTags returns all unique tags across all clips.
+func (s *Store) GetAllTags() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT tags FROM clips WHERE tags != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	set := make(map[string]bool)
+	for rows.Next() {
+		var tags string
+		if err := rows.Scan(&tags); err != nil {
+			return nil, err
+		}
+		for _, t := range strings.Split(tags, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				set[t] = true
+			}
+		}
+	}
+	var result []string
+	for t := range set {
+		result = append(result, t)
+	}
+	sort.Strings(result)
+	return result, rows.Err()
+}
+
 func (s *Store) SetTags(id int64, tags string) error {
 	_, err := s.db.Exec(`UPDATE clips SET tags = ? WHERE id = ?`, tags, id)
 	return err
 }
 
-// AddTag appends a tag to a clip if not already present.
 func (s *Store) AddTag(id int64, tag string) error {
 	clip, err := s.GetByID(id)
 	if err != nil {
@@ -227,7 +277,7 @@ func (s *Store) AddTag(id int64, tag string) error {
 		parts := strings.Split(tags, ",")
 		for _, p := range parts {
 			if p == tag {
-				return nil // already has it
+				return nil
 			}
 		}
 		tags = tags + "," + tag
@@ -235,7 +285,6 @@ func (s *Store) AddTag(id int64, tag string) error {
 	return s.SetTags(id, tags)
 }
 
-// RemoveTag removes a tag from a clip.
 func (s *Store) RemoveTag(id int64, tag string) error {
 	clip, err := s.GetByID(id)
 	if err != nil {
@@ -251,26 +300,22 @@ func (s *Store) RemoveTag(id int64, tag string) error {
 	return s.SetTags(id, strings.Join(filtered, ","))
 }
 
-// Delete removes a clip by ID.
 func (s *Store) Delete(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM clips WHERE id = ?`, id)
 	return err
 }
 
-// Clear removes all non-fav clips.
 func (s *Store) Clear() error {
 	_, err := s.db.Exec(`DELETE FROM clips WHERE is_fav = 0`)
 	return err
 }
 
-// Count returns total number of clips.
 func (s *Store) Count() (int, error) {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM clips").Scan(&count)
 	return count, err
 }
 
-// GetByID returns a single clip.
 func (s *Store) GetByID(id int64) (*Clip, error) {
 	row := s.db.QueryRow(`SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, tags, created_at FROM clips WHERE id = ?`, id)
 	c, err := scanClip(row)

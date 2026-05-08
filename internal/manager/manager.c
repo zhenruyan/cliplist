@@ -1,7 +1,7 @@
 /*
- * manager.c — Paste-style clipboard manager window (GTK3)
+ * manager.c — Clipboard manager window (GTK3)
  *
- * Card-based grid layout with tags, favorites, categories.
+ * Compact card grid, right-click copy, tag sidebar grouping.
  */
 
 #include "manager.h"
@@ -15,28 +15,30 @@ static const char *MANAGER_CSS =
 ".cat-btn {\n"
 "  background: transparent; color: #7878a0;\n"
 "  border: none; border-radius: 8px;\n"
-"  padding: 10px 16px; font-size: 13px;\n"
+"  padding: 8px 14px; font-size: 12px;\n"
 "}\n"
 ".cat-btn:hover { background: rgba(255,255,255,0.06); color: #b0b0d0; }\n"
 ".cat-btn.active { background: rgba(255,255,255,0.10); color: #ffffff; font-weight: bold; }\n"
+".sidebar-sep { background: rgba(255,255,255,0.08); min-height: 1px; margin: 8px 14px; }\n"
+".sidebar-label { color: #555578; font-size: 10px; font-weight: bold; }\n"
 "/* ── content ─────────────────────────── */\n"
 ".manager-content { background: #f5f5f7; }\n"
 ".search-entry {\n"
 "  background: #ffffff; border: 1px solid #e0e0e0;\n"
-"  border-radius: 10px; padding: 8px 14px; font-size: 13px;\n"
-"  box-shadow: 0 1px 3px rgba(0,0,0,0.05);\n"
+"  border-radius: 8px; padding: 6px 12px; font-size: 12px;\n"
+"  box-shadow: 0 1px 2px rgba(0,0,0,0.04);\n"
 "}\n"
-".search-entry:focus { border-color: #4a90d9; box-shadow: 0 0 0 2px rgba(74,144,217,0.15); }\n"
+".search-entry:focus { border-color: #4a90d9; box-shadow: 0 0 0 2px rgba(74,144,217,0.12); }\n"
 "/* ── grid ────────────────────────────── */\n"
-".clips-grid { padding: 16px; background: #f5f5f7; }\n"
+".clips-grid { padding: 12px; background: #f5f5f7; }\n"
 "/* ── card ────────────────────────────── */\n"
 ".clip-card {\n"
 "  background: #ffffff; border: 1px solid #e8e8e8;\n"
-"  border-radius: 10px; padding: 12px;\n"
-"  box-shadow: 0 1px 3px rgba(0,0,0,0.06);\n"
+"  border-radius: 8px; padding: 8px;\n"
+"  box-shadow: 0 1px 2px rgba(0,0,0,0.05);\n"
 "}\n"
 ".clip-card:hover {\n"
-"  box-shadow: 0 4px 14px rgba(0,0,0,0.10);\n"
+"  box-shadow: 0 3px 10px rgba(0,0,0,0.09);\n"
 "  border-color: #d0d0d0;\n"
 "}\n"
 ".clip-card.copied {\n"
@@ -44,12 +46,12 @@ static const char *MANAGER_CSS =
 "  background: #f0fff0;\n"
 "}\n"
 ".card-text {\n"
-"  font-size: 12px; color: #333333;\n"
+"  font-size: 11px; color: #333333;\n"
 "}\n"
 "/* ── tags ────────────────────────────── */\n"
 ".tag-pill {\n"
-"  color: #ffffff; border-radius: 8px;\n"
-"  padding: 1px 8px; font-size: 10px;\n"
+"  color: #ffffff; border-radius: 6px;\n"
+"  padding: 0 6px; font-size: 9px;\n"
 "}\n"
 ".tag-blue   { background: #4a90d9; }\n"
 ".tag-green  { background: #5cb85c; }\n"
@@ -60,25 +62,25 @@ static const char *MANAGER_CSS =
 ".tag-pink   { background: #e91e63; }\n"
 ".tag-indigo { background: #3f51b5; }\n"
 ".add-tag {\n"
-"  color: #b0b0b0; font-size: 13px;\n"
+"  color: #b0b0b0; font-size: 11px;\n"
 "}\n"
 ".add-tag:hover { color: #4a90d9; }\n"
 "/* ── action bar ──────────────────────── */\n"
-".card-action { opacity: 0.4; }\n"
+".card-action { opacity: 0.3; }\n"
 ".clip-card:hover .card-action { opacity: 1.0; }\n"
-".card-heart { font-size: 14px; }\n"
+".card-heart { font-size: 12px; }\n"
 ".card-heart.fav { color: #ff4757; }\n"
 ".card-heart:not(.fav) { color: #c0c0c0; }\n"
 ".card-del {\n"
 "  background: transparent; border: none;\n"
-"  color: transparent; font-size: 14px;\n"
-"  padding: 0 4px; border-radius: 6px;\n"
-"  min-width: 20px; min-height: 20px;\n"
+"  color: transparent; font-size: 12px;\n"
+"  padding: 0 3px; border-radius: 4px;\n"
+"  min-width: 18px; min-height: 18px;\n"
 "}\n"
 ".clip-card:hover .card-del { color: #c0c0c0; }\n"
 ".card-del:hover { color: #ff4757; background: rgba(255,71,87,0.08); }\n"
 "/* ── empty ───────────────────────────── */\n"
-".empty-label { color: #aaaaaa; font-size: 14px; }\n";
+".empty-label { color: #aaaaaa; font-size: 13px; }\n";
 
 /* ── Tag color mapping ────────────────────────────────────────── */
 
@@ -97,38 +99,35 @@ static const char* tagColorClass(const char *tag) {
 
 /* ── Globals ──────────────────────────────────────────────────── */
 
-static GtkWidget *mgrWin     = NULL;
-static GtkWidget *mgrSidebar = NULL;
-static GtkWidget *mgrSearch  = NULL;
-static GtkWidget *mgrGrid    = NULL;
-static GtkWidget *mgrEmpty   = NULL;
-static int        activeCategory = 0;
-
-static const struct { int id; const char *label; const char *icon; } categories[] = {
-    { 0, "All Items", "\xe2\x98\xb0" },
-    { 1, "Text",      "\xc2\xb6"     },
-    { 2, "Images",    "\xe2\x96\xa1"  },
-    { 3, "Favorites", "\xe2\x98\x85"  },
-};
-#define NUM_CATEGORIES (int)(sizeof(categories)/sizeof(categories[0]))
+static GtkWidget *mgrWin        = NULL;
+static GtkWidget *mgrSidebar    = NULL;
+static GtkWidget *tagSidebarBox = NULL;
+static GtkWidget *mgrSearch     = NULL;
+static GtkWidget *mgrGrid       = NULL;
+static GtkWidget *mgrEmpty      = NULL;
+static GtkWidget *activeBtn     = NULL;
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
-static void setActiveCat(GtkButton *btn) {
-    GList *ch = gtk_container_get_children(GTK_CONTAINER(mgrSidebar));
-    for (GList *l = ch; l; l = l->next)
-        if (GTK_IS_BUTTON(l->data))
-            gtk_style_context_remove_class(
-                gtk_widget_get_style_context(GTK_WIDGET(l->data)), "active");
-    g_list_free(ch);
+static void setActiveButton(GtkButton *btn) {
+    if (activeBtn)
+        gtk_style_context_remove_class(
+            gtk_widget_get_style_context(activeBtn), "active");
+    activeBtn = GTK_WIDGET(btn);
     gtk_style_context_add_class(
-        gtk_widget_get_style_context(GTK_WIDGET(btn)), "active");
+        gtk_widget_get_style_context(activeBtn), "active");
 }
 
 static void onCatClick(GtkButton *btn, gpointer data) {
-    activeCategory = GPOINTER_TO_INT(data);
-    setActiveCat(btn);
-    goCategoryChanged(activeCategory);
+    setActiveButton(btn);
+    goCategoryChanged(GPOINTER_TO_INT(data));
+}
+
+static void onTagGroupClick(GtkButton *btn, gpointer data) {
+    (void)data;
+    setActiveButton(btn);
+    const char *tag = g_object_get_data(G_OBJECT(btn), "tag-name");
+    goTagGroupChanged((char *)tag);
 }
 
 static void onSearchChanged(GtkSearchEntry *e, gpointer d) {
@@ -156,14 +155,13 @@ static gboolean removeCopiedClass(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-/* ── Card event handlers ──────────────────────────────────────── */
+/* ── Right-click to copy ──────────────────────────────────────── */
 
 static gboolean onCardEvt(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) {
     (void)evtBox;
-    if (ev->button != 1) return FALSE;
+    if (ev->button != 3) return FALSE;  /* right-click only */
     int id = GPOINTER_TO_INT(data);
     goCardClicked(id);
-    /* visual feedback on the inner card box */
     GtkWidget *card = gtk_bin_get_child(GTK_BIN(evtBox));
     if (card) {
         gtk_style_context_add_class(gtk_widget_get_style_context(card), "copied");
@@ -172,10 +170,11 @@ static gboolean onCardEvt(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) 
     return TRUE;
 }
 
+/* ── Heart / delete ───────────────────────────────────────────── */
+
 static gboolean onHeartEvt(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) {
     (void)evtBox; (void)ev;
     int id = GPOINTER_TO_INT(data);
-    /* evtBox → bar → card */
     GtkWidget *bar  = gtk_widget_get_parent(evtBox);
     GtkWidget *card = gtk_widget_get_parent(bar);
     GtkWidget *heart = g_object_get_data(G_OBJECT(card), "heart-widget");
@@ -205,7 +204,7 @@ static void onDelClick(GtkButton *btn, gpointer data) {
     goCardDeleted(id);
 }
 
-/* ── Tag event handlers ───────────────────────────────────────── */
+/* ── Tag add / remove ─────────────────────────────────────────── */
 
 static gboolean onTagRemove(GtkWidget *evtBox, GdkEventButton *ev, gpointer d) {
     (void)d;
@@ -226,26 +225,25 @@ static gboolean onAddTag(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) {
         "Add Tag", NULL, GTK_DIALOG_MODAL,
         "_Cancel", GTK_RESPONSE_CANCEL,
         "_Add", GTK_RESPONSE_OK, NULL);
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 240, -1);
 
-    gtk_window_set_default_size(GTK_WINDOW(dialog), 280, -1);
-    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    gtk_widget_set_margin_top(content, 12);
-    gtk_widget_set_margin_bottom(content, 12);
-    gtk_widget_set_margin_start(content, 12);
-    gtk_widget_set_margin_end(content, 12);
+    GtkWidget *ca = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_widget_set_margin_top(ca, 10);
+    gtk_widget_set_margin_bottom(ca, 10);
+    gtk_widget_set_margin_start(ca, 10);
+    gtk_widget_set_margin_end(ca, 10);
 
     GtkWidget *entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Tag name...");
-    gtk_container_add(GTK_CONTAINER(content), entry);
+    gtk_container_add(GTK_CONTAINER(ca), entry);
     gtk_widget_show_all(dialog);
     gtk_widget_grab_focus(entry);
 
     int response = gtk_dialog_run(GTK_DIALOG(dialog));
     if (response == GTK_RESPONSE_OK) {
         const char *tag = gtk_entry_get_text(GTK_ENTRY(entry));
-        if (tag && strlen(tag) > 0) {
+        if (tag && strlen(tag) > 0)
             goTagAdded(id, (char *)tag);
-        }
     }
     gtk_widget_destroy(dialog);
     return TRUE;
@@ -254,7 +252,6 @@ static gboolean onAddTag(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) {
 /* ── Build window ─────────────────────────────────────────────── */
 
 void initManagerWindow(void) {
-    /* CSS */
     GtkCssProvider *css = gtk_css_provider_new();
     gtk_css_provider_load_from_data(css, MANAGER_CSS, -1, NULL);
     gtk_style_context_add_provider_for_screen(
@@ -266,7 +263,7 @@ void initManagerWindow(void) {
     /* Window */
     mgrWin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(mgrWin), "Cliplist");
-    gtk_window_set_default_size(GTK_WINDOW(mgrWin), 1000, 640);
+    gtk_window_set_default_size(GTK_WINDOW(mgrWin), 860, 520);
     gtk_window_set_position(GTK_WINDOW(mgrWin), GTK_WIN_POS_CENTER);
     gtk_window_set_type_hint(GTK_WINDOW(mgrWin), GDK_WINDOW_TYPE_HINT_DIALOG);
 
@@ -275,44 +272,74 @@ void initManagerWindow(void) {
 
     /* ── Sidebar ── */
     mgrSidebar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_widget_set_size_request(mgrSidebar, 190, -1);
+    gtk_widget_set_size_request(mgrSidebar, 170, -1);
     gtk_style_context_add_class(gtk_widget_get_style_context(mgrSidebar), "sidebar");
     gtk_box_pack_start(GTK_BOX(hbox), mgrSidebar, FALSE, FALSE, 0);
 
-    gtk_widget_set_margin_top(mgrSidebar, 28);
-    gtk_widget_set_margin_start(mgrSidebar, 20);
-    gtk_widget_set_margin_bottom(mgrSidebar, 20);
+    gtk_widget_set_margin_top(mgrSidebar, 22);
+    gtk_widget_set_margin_start(mgrSidebar, 16);
 
+    /* title */
     GtkWidget *titleLabel = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(titleLabel),
-        "<span font='18' weight='bold' foreground='#ffffff'>Cliplist</span>");
+        "<span font='16' weight='bold' foreground='#ffffff'>Cliplist</span>");
     gtk_widget_set_halign(titleLabel, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(mgrSidebar), titleLabel, FALSE, FALSE, 0);
 
     GtkWidget *subLabel = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(subLabel),
-        "<span font='9' foreground='#585878'>Clipboard History</span>");
+        "<span font='9' foreground='#505070'>Clipboard History</span>");
     gtk_widget_set_halign(subLabel, GTK_ALIGN_START);
     gtk_widget_set_margin_top(subLabel, 2);
-    gtk_widget_set_margin_bottom(subLabel, 28);
+    gtk_widget_set_margin_bottom(subLabel, 20);
     gtk_box_pack_start(GTK_BOX(mgrSidebar), subLabel, FALSE, FALSE, 0);
 
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "  %s  %s", categories[i].icon, categories[i].label);
+    /* category buttons */
+    static const struct { int id; const char *icon; const char *label; } cats[] = {
+        { 0, "\xe2\x98\xb0", "All Items" },
+        { 1, "\xc2\xb6",     "Text"      },
+        { 2, "\xe2\x96\xa1", "Images"    },
+        { 3, "\xe2\x98\x85", "Favorites" },
+    };
+    for (int i = 0; i < 4; i++) {
+        char buf[48];
+        snprintf(buf, sizeof(buf), " %s  %s", cats[i].icon, cats[i].label);
         GtkWidget *btn = gtk_button_new_with_label(buf);
         gtk_button_set_relief(GTK_BUTTON(btn), GTK_RELIEF_NONE);
         gtk_widget_set_halign(btn, GTK_ALIGN_FILL);
-        gtk_widget_set_margin_start(btn, 8);
-        gtk_widget_set_margin_end(btn, 8);
-        gtk_widget_set_margin_bottom(btn, 2);
+        gtk_widget_set_margin_end(btn, 12);
+        gtk_widget_set_margin_bottom(btn, 1);
         GtkStyleContext *bCtx = gtk_widget_get_style_context(btn);
         gtk_style_context_add_class(bCtx, "cat-btn");
-        if (i == 0) gtk_style_context_add_class(bCtx, "active");
-        g_signal_connect(btn, "clicked", G_CALLBACK(onCatClick), GINT_TO_POINTER(i));
+        if (i == 0) {
+            gtk_style_context_add_class(bCtx, "active");
+            activeBtn = btn;
+        }
+        g_signal_connect(btn, "clicked", G_CALLBACK(onCatClick), GINT_TO_POINTER(cats[i].id));
         gtk_box_pack_start(GTK_BOX(mgrSidebar), btn, FALSE, FALSE, 0);
     }
 
+    /* separator */
+    GtkWidget *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_style_context_add_class(gtk_widget_get_style_context(sep), "sidebar-sep");
+    gtk_widget_set_margin_top(sep, 10);
+    gtk_widget_set_margin_bottom(sep, 6);
+    gtk_box_pack_start(GTK_BOX(mgrSidebar), sep, FALSE, FALSE, 0);
+
+    /* "TAGS" label */
+    GtkWidget *tagsLabel = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(tagsLabel),
+        "<span font='9' foreground='#505070'>TAGS</span>");
+    gtk_widget_set_halign(tagsLabel, GTK_ALIGN_START);
+    gtk_widget_set_margin_bottom(tagsLabel, 6);
+    gtk_widget_set_margin_end(tagsLabel, 12);
+    gtk_box_pack_start(GTK_BOX(mgrSidebar), tagsLabel, FALSE, FALSE, 0);
+
+    /* tag button container */
+    tagSidebarBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(mgrSidebar), tagSidebarBox, FALSE, FALSE, 0);
+
+    /* spacer */
     GtkWidget *spacer = gtk_label_new(NULL);
     gtk_widget_set_vexpand(spacer, TRUE);
     gtk_box_pack_start(GTK_BOX(mgrSidebar), spacer, TRUE, TRUE, 0);
@@ -324,10 +351,10 @@ void initManagerWindow(void) {
 
     /* search bar */
     GtkWidget *searchBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_margin_top(searchBox, 16);
-    gtk_widget_set_margin_start(searchBox, 20);
-    gtk_widget_set_margin_end(searchBox, 20);
-    gtk_widget_set_margin_bottom(searchBox, 12);
+    gtk_widget_set_margin_top(searchBox, 12);
+    gtk_widget_set_margin_start(searchBox, 16);
+    gtk_widget_set_margin_end(searchBox, 16);
+    gtk_widget_set_margin_bottom(searchBox, 8);
     gtk_box_pack_start(GTK_BOX(content), searchBox, FALSE, FALSE, 0);
 
     mgrSearch = gtk_search_entry_new();
@@ -349,8 +376,8 @@ void initManagerWindow(void) {
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(mgrGrid), GTK_SELECTION_NONE);
     gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(mgrGrid), TRUE);
     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(mgrGrid), 20);
-    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(mgrGrid), 14);
-    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(mgrGrid), 14);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(mgrGrid), 10);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(mgrGrid), 10);
     gtk_style_context_add_class(gtk_widget_get_style_context(mgrGrid), "clips-grid");
     gtk_container_add(GTK_CONTAINER(scroll), mgrGrid);
 
@@ -394,37 +421,56 @@ void showEmpty(void) {
     gtk_widget_show(mgrEmpty);
 }
 
-/* ── Add a tag pill to a tag-bar box ──────────────────────────── */
+/* ── Tag sidebar ──────────────────────────────────────────────── */
+
+void clearTagSidebar(void) {
+    GList *ch = gtk_container_get_children(GTK_CONTAINER(tagSidebarBox));
+    for (GList *l = ch; l; l = l->next)
+        gtk_widget_destroy(GTK_WIDGET(l->data));
+    g_list_free(ch);
+}
+
+void addTagButton(const char *tag) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "  # %s", tag);
+    GtkWidget *btn = gtk_button_new_with_label(buf);
+    gtk_button_set_relief(GTK_BUTTON(btn), GTK_RELIEF_NONE);
+    gtk_widget_set_halign(btn, GTK_ALIGN_FILL);
+    gtk_widget_set_margin_end(btn, 12);
+    gtk_widget_set_margin_bottom(btn, 1);
+    GtkStyleContext *bCtx = gtk_widget_get_style_context(btn);
+    gtk_style_context_add_class(bCtx, "cat-btn");
+    g_object_set_data_full(G_OBJECT(btn), "tag-name", g_strdup(tag), g_free);
+    g_signal_connect(btn, "clicked", G_CALLBACK(onTagGroupClick), NULL);
+    gtk_box_pack_start(GTK_BOX(tagSidebarBox), btn, FALSE, FALSE, 0);
+    gtk_widget_show_all(btn);
+}
+
+/* ── Tag pill on a card ───────────────────────────────────────── */
 
 static void addTagPill(GtkWidget *tagBar, int clipId, const char *tag) {
     GtkWidget *evtBox = gtk_event_box_new();
     GtkWidget *label  = gtk_label_new(tag);
-
     GtkStyleContext *ctx = gtk_widget_get_style_context(label);
     gtk_style_context_add_class(ctx, "tag-pill");
     gtk_style_context_add_class(ctx, tagColorClass(tag));
-
     gtk_container_add(GTK_CONTAINER(evtBox), label);
-
     g_object_set_data(G_OBJECT(evtBox), "clip-id", GINT_TO_POINTER(clipId));
     g_object_set_data_full(G_OBJECT(evtBox), "tag-name", g_strdup(tag), g_free);
-
     g_signal_connect(evtBox, "button-press-event", G_CALLBACK(onTagRemove), NULL);
-
     gtk_box_pack_start(GTK_BOX(tagBar), evtBox, FALSE, FALSE, 0);
     gtk_widget_show_all(evtBox);
 }
 
-/* ── Add a clip card to the grid ──────────────────────────────── */
+/* ── Add a clip card ──────────────────────────────────────────── */
 
 void addClipCard(int id, const char *text, int textLen,
                  int isImage, const char *imagePath, int isFav,
                  const char *tags)
 {
-    /* outer event-box for click-to-copy */
     GtkWidget *cardEvt = gtk_event_box_new();
-    GtkWidget *card    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_widget_set_size_request(cardEvt, 220, -1);
+    GtkWidget *card    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_size_request(cardEvt, 160, -1);
     gtk_container_add(GTK_CONTAINER(cardEvt), card);
     gtk_style_context_add_class(gtk_widget_get_style_context(card), "clip-card");
 
@@ -434,7 +480,7 @@ void addClipCard(int id, const char *text, int textLen,
     /* ── preview ── */
     if (isImage && imagePath) {
         GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(
-            imagePath, 196, 80, TRUE, NULL);
+            imagePath, 144, 56, TRUE, NULL);
         if (pb) {
             GtkWidget *img = gtk_image_new_from_pixbuf(pb);
             g_object_unref(pb);
@@ -443,12 +489,12 @@ void addClipCard(int id, const char *text, int textLen,
         } else {
             GtkWidget *ph = gtk_label_new(NULL);
             gtk_label_set_markup(GTK_LABEL(ph),
-                "<span foreground='#aaaaaa'>[image]</span>");
+                "<span foreground='#aaaaaa' font='10'>[image]</span>");
             gtk_widget_set_halign(ph, GTK_ALIGN_CENTER);
-            gtk_box_pack_start(GTK_BOX(card), ph, FALSE, FALSE, 4);
+            gtk_box_pack_start(GTK_BOX(card), ph, FALSE, FALSE, 2);
         }
     } else if (text && textLen > 0) {
-        int len = textLen < 400 ? textLen : 400;
+        int len = textLen < 300 ? textLen : 300;
         char *dup = g_strndup(text, len);
         GtkWidget *label = gtk_label_new(dup);
         g_free(dup);
@@ -456,26 +502,25 @@ void addClipCard(int id, const char *text, int textLen,
         gtk_label_set_yalign(GTK_LABEL(label), 0);
         gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
         gtk_label_set_line_wrap_mode(GTK_LABEL(label), PANGO_WRAP_WORD_CHAR);
-        gtk_label_set_lines(GTK_LABEL(label), 4);
+        gtk_label_set_lines(GTK_LABEL(label), 3);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
         gtk_style_context_add_class(gtk_widget_get_style_context(label), "card-text");
         gtk_box_pack_start(GTK_BOX(card), label, FALSE, FALSE, 0);
     }
 
     /* ── tag bar ── */
-    GtkWidget *tagBar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    GtkWidget *tagBar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
     gtk_box_pack_start(GTK_BOX(card), tagBar, FALSE, FALSE, 0);
 
     if (tags && tags[0]) {
         char **list = g_strsplit(tags, ",", -1);
-        for (int i = 0; list[i]; i++) {
+        for (int i = 0; list[i]; i++)
             if (list[i][0])
                 addTagPill(tagBar, id, list[i]);
-        }
         g_strfreev(list);
     }
 
-    /* [+] add tag button */
+    /* [+] add tag */
     GtkWidget *addEvt   = gtk_event_box_new();
     GtkWidget *addLabel = gtk_label_new("+");
     gtk_style_context_add_class(gtk_widget_get_style_context(addLabel), "add-tag");
@@ -486,8 +531,7 @@ void addClipCard(int id, const char *text, int textLen,
 
     /* ── action bar ── */
     GtkWidget *actionBar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    GtkStyleContext *aCtx = gtk_widget_get_style_context(actionBar);
-    gtk_style_context_add_class(aCtx, "card-action");
+    gtk_style_context_add_class(gtk_widget_get_style_context(actionBar), "card-action");
     gtk_box_pack_start(GTK_BOX(card), actionBar, FALSE, FALSE, 0);
 
     /* heart */
@@ -508,7 +552,6 @@ void addClipCard(int id, const char *text, int textLen,
     g_signal_connect(heartEvt, "button-press-event",
         G_CALLBACK(onHeartEvt), GINT_TO_POINTER(id));
     gtk_box_pack_start(GTK_BOX(actionBar), heartEvt, FALSE, FALSE, 0);
-
     g_object_set_data(G_OBJECT(card), "heart-widget", heart);
 
     /* spacer */
@@ -524,7 +567,7 @@ void addClipCard(int id, const char *text, int textLen,
         G_CALLBACK(onDelClick), GINT_TO_POINTER(id));
     gtk_box_pack_start(GTK_BOX(actionBar), delBtn, FALSE, FALSE, 0);
 
-    /* card click → copy */
+    /* right-click → copy */
     g_signal_connect(cardEvt, "button-press-event",
         G_CALLBACK(onCardEvt), GINT_TO_POINTER(id));
 
@@ -537,6 +580,12 @@ void addClipCard(int id, const char *text, int textLen,
 gboolean rebuildGridIdle(gpointer data) {
     (void)data;
     goRebuildGrid();
+    return G_SOURCE_REMOVE;
+}
+
+gboolean rebuildTagSidebarIdle(gpointer data) {
+    (void)data;
+    goRebuildTagSidebar();
     return G_SOURCE_REMOVE;
 }
 

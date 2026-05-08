@@ -16,8 +16,13 @@ void addClipCard(int id, const char *text, int textLen,
                  int isImage, const char *imagePath, int isFav,
                  const char *tags);
 
+/* Tag sidebar */
+void clearTagSidebar(void);
+void addTagButton(const char *tag);
+
 /* Idle callbacks for g_idle_add */
 gboolean rebuildGridIdle(gpointer data);
+gboolean rebuildTagSidebarIdle(gpointer data);
 gboolean showManagerIdle(gpointer data);
 gboolean toggleManagerIdle(gpointer data);
 gboolean stopIdle(gpointer data);
@@ -33,6 +38,8 @@ extern void goCardFavorited(int id);
 extern void goCardDeleted(int id);
 extern void goTagAdded(int id, char *tag);
 extern void goTagRemoved(int id, char *tag);
+extern void goTagGroupChanged(char *tagName);
 extern void goRebuildGrid(void);
+extern void goRebuildTagSidebar(void);
 
 #endif

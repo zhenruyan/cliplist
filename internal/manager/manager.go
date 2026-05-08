@@ -20,6 +20,7 @@ var (
 	mgrMu    sync.Mutex
 	mgrStore *store.Store
 	mgrClips []store.Clip
+	mgrTags  []string // unique tags for sidebar
 )
 
 //export goCategoryChanged
@@ -95,9 +96,7 @@ func goCardClicked(id C.int) {
 	}
 	if err := xmonitor.SetClipboard(clip.Content); err != nil {
 		log.Printf("[manager] copy: %v", err)
-		return
 	}
-	// Don't close — user may want to copy more clips
 }
 
 //export goCardFavorited
@@ -131,7 +130,6 @@ func goTagAdded(id C.int, cTag *C.char) {
 			log.Printf("[manager] add tag: %v", err)
 			return
 		}
-		// rebuild grid to show new tag
 		reloadAndRebuild()
 	}()
 }
@@ -146,6 +144,25 @@ func goTagRemoved(id C.int, cTag *C.char) {
 		if err := mgrStore.RemoveTag(int64(id), tag); err != nil {
 			log.Printf("[manager] remove tag: %v", err)
 		}
+	}()
+}
+
+//export goTagGroupChanged
+func goTagGroupChanged(cTag *C.char) {
+	if mgrStore == nil {
+		return
+	}
+	tag := C.GoString(cTag)
+	go func() {
+		clips, err := mgrStore.ListByTag(tag, 200)
+		if err != nil {
+			log.Printf("[manager] list by tag %q: %v", tag, err)
+			return
+		}
+		mgrMu.Lock()
+		mgrClips = clips
+		mgrMu.Unlock()
+		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 	}()
 }
 
@@ -178,11 +195,38 @@ func goRebuildGrid() {
 	}
 }
 
+//export goRebuildTagSidebar
+func goRebuildTagSidebar() {
+	mgrMu.Lock()
+	tags := make([]string, len(mgrTags))
+	copy(tags, mgrTags)
+	mgrMu.Unlock()
+
+	C.clearTagSidebar()
+	for _, t := range tags {
+		ct := C.CString(t)
+		C.addTagButton(ct)
+		C.free(unsafe.Pointer(ct))
+	}
+}
+
 func boolCint(b bool) C.int {
 	if b {
 		return 1
 	}
 	return 0
+}
+
+// collectTags extracts unique tags from clips and the DB.
+func collectTags() {
+	tags, err := mgrStore.GetAllTags()
+	if err != nil {
+		log.Printf("[manager] get tags: %v", err)
+		return
+	}
+	mgrMu.Lock()
+	mgrTags = tags
+	mgrMu.Unlock()
 }
 
 func reloadAndRebuild() {
@@ -194,7 +238,11 @@ func reloadAndRebuild() {
 	mgrMu.Lock()
 	mgrClips = clips
 	mgrMu.Unlock()
+
+	collectTags()
+
 	C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
+	C.g_idle_add(C.GSourceFunc(C.rebuildTagSidebarIdle), nil)
 }
 
 // Init creates the GTK manager window. Must be called from main goroutine.
@@ -219,8 +267,11 @@ func Run(db *store.Store) {
 		mgrMu.Unlock()
 	}
 
+	collectTags()
+
 	go func() {
 		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
+		C.g_idle_add(C.GSourceFunc(C.rebuildTagSidebarIdle), nil)
 		C.g_idle_add(C.GSourceFunc(C.showManagerIdle), nil)
 	}()
 
