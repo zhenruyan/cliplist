@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icons/cliplist.svg" width="96" height="96" alt="Cliplist">
+</p>
+
 # Cliplist
 
 A lightweight clipboard history manager for Linux (X11/XFCE4).
