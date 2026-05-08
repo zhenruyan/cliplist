@@ -1,0 +1,17 @@
+# Cliplist configuration
+# Save to: ~/.config/cliplist/config.toml
+
+max_history = 100
+poll_interval = "500ms"
+# db_path = "~/.config/cliplist/cliplist.db"
+# image_dir = "~/.local/share/cliplist/images"
+paste_delay = "80ms"
+auto_start = true
+ignore_whitespace = true
+max_content_length = 1048576  # 1MB
+
+# Global hotkey (disabled by default)
+# Uncomment to enable:
+# [hotkey]
+# modifiers = ["ctrl", "shift"]
+# key = "v"

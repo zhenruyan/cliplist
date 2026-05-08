@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cliplist
+Comment=Clipboard history manager
+Exec=cliplistd
+Icon=edit-paste
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+X-XFCE-Autostart-enabled=true
