@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/user/cliplist/internal/config"
 	"github.com/user/cliplist/internal/manager"
@@ -32,6 +31,4 @@ func main() {
 
 	// Load clips and enter GTK main loop (blocks)
 	manager.Run(db)
-
-	os.Exit(0)
 }

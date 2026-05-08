@@ -166,6 +166,18 @@ func GetClipboard() (string, error) {
 	return "", nil
 }
 
+// SetImageClipboard reads an image file and sets it to CLIPBOARD.
+func SetImageClipboard(path string) error {
+	cmd := exec.Command("xclip", "-selection", "clipboard", "-t", "image/png")
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	cmd.Stdin = f
+	return cmd.Run()
+}
+
 // SetClipboard sets both CLIPBOARD and PRIMARY selections.
 func SetClipboard(content string) error {
 	cmd := exec.Command("xclip", "-selection", "clipboard")
@@ -194,12 +206,19 @@ func GetImageClipboard() ([]byte, error) {
 }
 
 func getSourceApp() string {
+	// Try class name first (e.g. Google-chrome)
 	cmd := exec.Command("xdotool", "getactivewindow", "getwindowclassname")
 	out, err := cmd.Output()
-	if err != nil {
-		return ""
+	if err == nil && len(out) > 0 {
+		return strings.TrimSpace(string(out))
 	}
-	return strings.TrimSpace(string(out))
+	// Fallback to window name
+	cmd = exec.Command("xdotool", "getactivewindow", "getwindowname")
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		return strings.TrimSpace(string(out))
+	}
+	return "Unknown"
 }
 
 func simpleHash(s string) string {

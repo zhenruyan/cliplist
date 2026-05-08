@@ -111,6 +111,23 @@ static void initTray(const char *iconPath) {
 
 static void runGTK() { gtk_main(); }
 static void stopGTK() { gtk_main_quit(); }
+
+extern void goRebuildMenu();
+static gboolean rebuildMenuIdle(gpointer data) {
+    (void)data;
+    goRebuildMenu();
+    return G_SOURCE_REMOVE;
+}
+
+static void scheduleRebuildMenu() {
+    g_idle_add((GSourceFunc)rebuildMenuIdle, NULL);
+}
+
+static gboolean stopIdle(gpointer data) {
+    (void)data;
+    gtk_main_quit();
+    return G_SOURCE_REMOVE;
+}
 */
 import "C"
 import (
@@ -182,7 +199,16 @@ func (t *Tray) UpdateClips(clips []MenuClip) {
 	t.mu.Lock()
 	t.clips = clips
 	t.mu.Unlock()
-	t.rebuildMenu()
+	// Safely schedule UI rebuild on GTK main thread
+	C.scheduleRebuildMenu()
+}
+
+//export goRebuildMenu
+func goRebuildMenu() {
+	if currentTray == nil {
+		return
+	}
+	currentTray.rebuildMenu()
 }
 
 func (t *Tray) rebuildMenu() {
@@ -192,6 +218,7 @@ func (t *Tray) rebuildMenu() {
 	t.mu.Unlock()
 
 	C.clearMenuItems()
+    // ... 剩下的逻辑保持在 C 层安全调用
 
 	if len(clips) == 0 {
 		label := C.CString("(no clips)")

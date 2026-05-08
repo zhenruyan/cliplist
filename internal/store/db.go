@@ -67,11 +67,7 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_clips_created ON clips(created_at DESC);
 	`
 	_, err := s.db.Exec(schema)
-	if err != nil {
-		return err
-	}
-	s.db.Exec(`ALTER TABLE clips ADD COLUMN tags TEXT DEFAULT ''`)
-	return nil
+	return err
 }
 
 const selectCols = `o.id, o.content, o.image_path, o.mime_type, o.is_image, o.is_fav, o.source_app, o.tags, o.created_at`
@@ -84,15 +80,27 @@ func scanClip(sc interface{ Scan(...interface{}) error }) (Clip, error) {
 }
 
 func (s *Store) Add(c *Clip) error {
-	var lastContent sql.NullString
-	err := s.db.QueryRow(
-		"SELECT content FROM clips ORDER BY created_at DESC LIMIT 1",
-	).Scan(&lastContent)
-	if err == nil && lastContent.Valid && lastContent.String == c.Content {
-		return nil
+	if !c.IsImage {
+		var lastContent sql.NullString
+		err := s.db.QueryRow(
+			"SELECT content FROM clips WHERE is_image = 0 ORDER BY created_at DESC LIMIT 1",
+		).Scan(&lastContent)
+		if err == nil && lastContent.Valid && lastContent.String == c.Content {
+			return nil
+		}
+	} else {
+		// For images, we already do a basic hash check in monitor.go.
+		// To be safe, we can check the last saved image path.
+		var lastPath sql.NullString
+		err := s.db.QueryRow(
+			"SELECT image_path FROM clips WHERE is_image = 1 ORDER BY created_at DESC LIMIT 1",
+		).Scan(&lastPath)
+		if err == nil && lastPath.Valid && lastPath.String == c.ImagePath {
+			return nil
+		}
 	}
 
-	_, err = s.db.Exec(
+	_, err := s.db.Exec(
 		`INSERT INTO clips (content, image_path, mime_type, is_image, source_app)
 		 VALUES (?, ?, ?, ?, ?)`,
 		c.Content, c.ImagePath, c.MimeType, c.IsImage, c.SourceApp,
@@ -100,14 +108,17 @@ func (s *Store) Add(c *Clip) error {
 	return err
 }
 
-// List returns recent clips deduplicated by content (keeps latest).
+// List returns recent clips.
 func (s *Store) List(limit int) ([]Clip, error) {
 	if limit <= 0 {
 		limit = 50
 	}
+	// Deduplicate by content only for text; images are always unique by ID
 	rows, err := s.db.Query(
 		`SELECT `+selectCols+` FROM clips o
-		 INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
+		 WHERE o.id IN (
+			 SELECT MAX(id) FROM clips GROUP BY COALESCE(NULLIF(content, ''), id)
+		 )
 		 ORDER BY o.created_at DESC LIMIT ?`, limit,
 	)
 	if err != nil {
@@ -125,7 +136,7 @@ func (s *Store) List(limit int) ([]Clip, error) {
 	return clips, rows.Err()
 }
 
-// Search finds clips matching the keyword, ordered by match quality.
+// Search finds clips matching the keyword in content, tags or source app.
 func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 	if limit <= 0 {
 		limit = 50
@@ -133,19 +144,22 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 	kw := "%" + keyword + "%"
 	rows, err := s.db.Query(
 		`SELECT `+selectCols+` FROM clips o
-		 INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
-		 WHERE o.content LIKE ?
+		 WHERE o.id IN (
+			 SELECT MAX(id) FROM clips GROUP BY COALESCE(NULLIF(content, ''), id)
+		 )
+		 AND (o.content LIKE ? OR o.tags LIKE ? OR o.source_app LIKE ?)
 		 ORDER BY
 		   CASE
 		     WHEN o.content = ?          THEN 0
 		     WHEN o.content LIKE ? || '%' THEN 1
-		     WHEN o.content LIKE '%' || ? THEN 2
-		     ELSE 3
+		     WHEN o.tags LIKE ?          THEN 2
+		     WHEN o.source_app LIKE ?    THEN 3
+		     ELSE 4
 		   END,
 		   length(o.content),
 		   o.created_at DESC
 		 LIMIT ?`,
-		kw, keyword, keyword, keyword, limit,
+		kw, kw, kw, keyword, keyword, kw, kw, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -170,8 +184,9 @@ func (s *Store) ToggleFav(id int64) error {
 // ListFiltered returns clips with optional filters.
 func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, error) {
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
-	      WHERE 1=1`
+	      WHERE o.id IN (
+			  SELECT MAX(id) FROM clips GROUP BY COALESCE(NULLIF(content, ''), id)
+		  )`
 	var args []interface{}
 	if favOnly {
 		q += ` AND o.is_fav = 1`
@@ -208,8 +223,10 @@ func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, er
 func (s *Store) ListByTag(tag string, limit int) ([]Clip, error) {
 	pattern := "%," + tag + ",%"
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
-	      WHERE (',' || o.tags || ',') LIKE ?
+	      WHERE o.id IN (
+			  SELECT MAX(id) FROM clips GROUP BY COALESCE(NULLIF(content, ''), id)
+		  )
+	      AND (',' || o.tags || ',') LIKE ?
 	      ORDER BY o.created_at DESC`
 	args := []interface{}{pattern}
 	if limit > 0 {
@@ -281,8 +298,10 @@ func (s *Store) GetSourceApps() ([]string, error) {
 // ListBySource returns clips from a specific source app.
 func (s *Store) ListBySource(source string, limit int) ([]Clip, error) {
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
-	      WHERE o.source_app = ?
+	      WHERE o.id IN (
+			  SELECT MAX(id) FROM clips GROUP BY COALESCE(NULLIF(content, ''), id)
+		  )
+	      AND o.source_app = ?
 	      ORDER BY o.created_at DESC`
 	args := []interface{}{source}
 	if limit > 0 {

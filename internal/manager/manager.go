@@ -10,6 +10,7 @@ import (
 	"log"
 	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/user/cliplist/internal/store"
@@ -92,7 +93,9 @@ func goCardClicked(id C.int) {
 		return
 	}
 	if clip.IsImage {
-		log.Printf("[manager] image copy not yet supported")
+		if err := xmonitor.SetImageClipboard(clip.ImagePath); err != nil {
+			log.Printf("[manager] copy image: %v", err)
+		}
 		return
 	}
 	if err := xmonitor.SetClipboard(clip.Content); err != nil {
@@ -321,6 +324,7 @@ func Init(db *store.Store) {
 
 // Run loads clips and enters the GTK main loop. Blocks until Stop() is called.
 func Run(db *store.Store) {
+	// Pre-load data into Go memory
 	clips, err := db.List(200)
 	if err != nil {
 		log.Printf("[manager] preload: %v", err)
@@ -333,10 +337,10 @@ func Run(db *store.Store) {
 	collectTags()
 	collectSources()
 
+	// Use reloadAndRebuild to ensure all sidebars and grid are populated
 	go func() {
-		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
-		C.g_idle_add(C.GSourceFunc(C.rebuildTagSidebarIdle), nil)
-		C.g_idle_add(C.GSourceFunc(C.rebuildSourceSidebarIdle), nil)
+		time.Sleep(100 * time.Millisecond) // Wait for GTK to be ready
+		reloadAndRebuild()
 		C.g_idle_add(C.GSourceFunc(C.showManagerIdle), nil)
 	}()
 
@@ -347,5 +351,5 @@ func Run(db *store.Store) {
 
 // Stop exits the GTK main loop.
 func Stop() {
-	C.g_idle_add(C.GSourceFunc(C.stopIdle), nil)
+	C.stopIdle(nil)
 }
