@@ -32,15 +32,15 @@ func goCategoryChanged(id C.int) {
 		var err error
 		const limit = 200
 		switch int(id) {
-		case 1: // Text
+		case 1:
 			isImg := false
 			clips, err = mgrStore.ListFiltered(limit, false, &isImg)
-		case 2: // Images
+		case 2:
 			isImg := true
 			clips, err = mgrStore.ListFiltered(limit, false, &isImg)
-		case 3: // Favorites
+		case 3:
 			clips, err = mgrStore.ListFiltered(limit, true, nil)
-		default: // All
+		default:
 			clips, err = mgrStore.List(limit)
 		}
 		if err != nil {
@@ -97,7 +97,7 @@ func goCardClicked(id C.int) {
 		log.Printf("[manager] copy: %v", err)
 		return
 	}
-	C.hideManagerWindow()
+	// Don't close — user may want to copy more clips
 }
 
 //export goCardFavorited
@@ -120,6 +120,35 @@ func goCardDeleted(id C.int) {
 	}
 }
 
+//export goTagAdded
+func goTagAdded(id C.int, cTag *C.char) {
+	if mgrStore == nil {
+		return
+	}
+	tag := C.GoString(cTag)
+	go func() {
+		if err := mgrStore.AddTag(int64(id), tag); err != nil {
+			log.Printf("[manager] add tag: %v", err)
+			return
+		}
+		// rebuild grid to show new tag
+		reloadAndRebuild()
+	}()
+}
+
+//export goTagRemoved
+func goTagRemoved(id C.int, cTag *C.char) {
+	if mgrStore == nil {
+		return
+	}
+	tag := C.GoString(cTag)
+	go func() {
+		if err := mgrStore.RemoveTag(int64(id), tag); err != nil {
+			log.Printf("[manager] remove tag: %v", err)
+		}
+	}()
+}
+
 //export goRebuildGrid
 func goRebuildGrid() {
 	mgrMu.Lock()
@@ -129,17 +158,22 @@ func goRebuildGrid() {
 
 	C.clearGrid()
 	if len(clips) == 0 {
+		C.showEmpty()
 		return
 	}
 	for _, c := range clips {
 		if c.IsImage {
 			cPath := C.CString(c.ImagePath)
-			C.addClipCard(C.int(c.ID), nil, 0, 1, cPath, boolCint(c.IsFav))
+			cTags := C.CString(c.Tags)
+			C.addClipCard(C.int(c.ID), nil, 0, 1, cPath, boolCint(c.IsFav), cTags)
 			C.free(unsafe.Pointer(cPath))
+			C.free(unsafe.Pointer(cTags))
 		} else {
 			cText := C.CString(c.Content)
-			C.addClipCard(C.int(c.ID), cText, C.int(len(c.Content)), 0, nil, boolCint(c.IsFav))
+			cTags := C.CString(c.Tags)
+			C.addClipCard(C.int(c.ID), cText, C.int(len(c.Content)), 0, nil, boolCint(c.IsFav), cTags)
 			C.free(unsafe.Pointer(cText))
+			C.free(unsafe.Pointer(cTags))
 		}
 	}
 }
@@ -149,6 +183,18 @@ func boolCint(b bool) C.int {
 		return 1
 	}
 	return 0
+}
+
+func reloadAndRebuild() {
+	clips, err := mgrStore.List(200)
+	if err != nil {
+		log.Printf("[manager] reload: %v", err)
+		return
+	}
+	mgrMu.Lock()
+	mgrClips = clips
+	mgrMu.Unlock()
+	C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 }
 
 // Init creates the GTK manager window. Must be called from main goroutine.
@@ -164,7 +210,6 @@ func Init(db *store.Store) {
 
 // Run loads clips and enters the GTK main loop. Blocks until Stop() is called.
 func Run(db *store.Store) {
-	// Preload clips
 	clips, err := db.List(200)
 	if err != nil {
 		log.Printf("[manager] preload: %v", err)
@@ -174,7 +219,6 @@ func Run(db *store.Store) {
 		mgrMu.Unlock()
 	}
 
-	// Build grid, then show window
 	go func() {
 		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 		C.g_idle_add(C.GSourceFunc(C.showManagerIdle), nil)

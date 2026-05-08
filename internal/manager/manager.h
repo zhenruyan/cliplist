@@ -3,12 +3,6 @@
 
 #include <gtk/gtk.h>
 
-typedef struct {
-    int         id;
-    const char *label;
-    const char *icon;
-} Category;
-
 /* Build / lifecycle */
 void initManagerWindow(void);
 void toggleManagerWindow(void);
@@ -17,8 +11,10 @@ void hideManagerWindow(void);
 
 /* Data */
 void clearGrid(void);
+void showEmpty(void);
 void addClipCard(int id, const char *text, int textLen,
-                 int isImage, const char *imagePath, int isFav);
+                 int isImage, const char *imagePath, int isFav,
+                 const char *tags);
 
 /* Idle callbacks for g_idle_add */
 gboolean rebuildGridIdle(gpointer data);
@@ -35,6 +31,8 @@ extern void goManagerSearchChanged(void);
 extern void goCardClicked(int id);
 extern void goCardFavorited(int id);
 extern void goCardDeleted(int id);
+extern void goTagAdded(int id, char *tag);
+extern void goTagRemoved(int id, char *tag);
 extern void goRebuildGrid(void);
 
 #endif

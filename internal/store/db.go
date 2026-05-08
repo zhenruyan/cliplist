@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Clip struct {
-	ID         int64
-	Content    string
-	ImagePath  string
-	MimeType   string
-	IsImage    bool
-	IsFav      bool
-	SourceApp  string
-	CreatedAt  time.Time
+	ID        int64
+	Content   string
+	ImagePath string
+	MimeType  string
+	IsImage   bool
+	IsFav     bool
+	SourceApp string
+	Tags      string
+	CreatedAt time.Time
 }
 
 type Store struct {
@@ -58,23 +60,37 @@ func (s *Store) migrate() error {
 		is_image   BOOLEAN DEFAULT 0,
 		is_fav     BOOLEAN DEFAULT 0,
 		source_app TEXT DEFAULT '',
+		tags       TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_clips_created ON clips(created_at DESC);
 	`
 	_, err := s.db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+	// add tags column for existing databases
+	s.db.Exec(`ALTER TABLE clips ADD COLUMN tags TEXT DEFAULT ''`)
+	return nil
+}
+
+const selectCols = `id, content, image_path, mime_type, is_image, is_fav, source_app, tags, created_at`
+
+func scanClip(sc interface{ Scan(...interface{}) error }) (Clip, error) {
+	var c Clip
+	err := sc.Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
+		&c.IsImage, &c.IsFav, &c.SourceApp, &c.Tags, &c.CreatedAt)
+	return c, err
 }
 
 // Add inserts a new clip (skipping duplicates of the most recent entry).
 func (s *Store) Add(c *Clip) error {
-	// check duplicate: if the most recent clip has the same content, skip
 	var lastContent sql.NullString
 	err := s.db.QueryRow(
 		"SELECT content FROM clips ORDER BY created_at DESC LIMIT 1",
 	).Scan(&lastContent)
 	if err == nil && lastContent.Valid && lastContent.String == c.Content {
-		return nil // duplicate, skip
+		return nil
 	}
 
 	_, err = s.db.Exec(
@@ -82,21 +98,18 @@ func (s *Store) Add(c *Clip) error {
 		 VALUES (?, ?, ?, ?, ?)`,
 		c.Content, c.ImagePath, c.MimeType, c.IsImage, c.SourceApp,
 	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
-// List returns recent clips (non-deleted).
+// List returns recent clips deduplicated by content (keeps latest).
 func (s *Store) List(limit int) ([]Clip, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := s.db.Query(
-		`SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, created_at
-		 FROM clips ORDER BY created_at DESC LIMIT ?`, limit,
+		`SELECT `+selectCols+` FROM clips o
+		 INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+		 ORDER BY o.created_at DESC LIMIT ?`, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -105,9 +118,8 @@ func (s *Store) List(limit int) ([]Clip, error) {
 
 	var clips []Clip
 	for rows.Next() {
-		var c Clip
-		if err := rows.Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
-			&c.IsImage, &c.IsFav, &c.SourceApp, &c.CreatedAt); err != nil {
+		c, err := scanClip(rows)
+		if err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)
@@ -122,17 +134,18 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 	}
 	kw := "%" + keyword + "%"
 	rows, err := s.db.Query(
-		`SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, created_at
-		 FROM clips WHERE content LIKE ?
+		`SELECT `+selectCols+` FROM clips o
+		 INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+		 WHERE o.content LIKE ?
 		 ORDER BY
 		   CASE
-		     WHEN content = ?        THEN 0
-		     WHEN content LIKE ? || '%' THEN 1
-		     WHEN content LIKE '%' || ? THEN 2
+		     WHEN o.content = ?          THEN 0
+		     WHEN o.content LIKE ? || '%' THEN 1
+		     WHEN o.content LIKE '%' || ? THEN 2
 		     ELSE 3
 		   END,
-		   length(content),
-		   created_at DESC
+		   length(o.content),
+		   o.created_at DESC
 		 LIMIT ?`,
 		kw, keyword, keyword, keyword, limit,
 	)
@@ -143,9 +156,8 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 
 	var clips []Clip
 	for rows.Next() {
-		var c Clip
-		if err := rows.Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
-			&c.IsImage, &c.IsFav, &c.SourceApp, &c.CreatedAt); err != nil {
+		c, err := scanClip(rows)
+		if err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)
@@ -159,22 +171,23 @@ func (s *Store) ToggleFav(id int64) error {
 	return err
 }
 
-// ListFiltered returns clips with optional filters. limit=0 means no limit.
-// favOnly=true filters to favorites only. isImage nil=any, &true=images, &false=text.
+// ListFiltered returns clips with optional filters.
 func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, error) {
-	q := `SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, created_at FROM clips WHERE 1=1`
+	q := `SELECT ` + selectCols + ` FROM clips o
+	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      WHERE 1=1`
 	var args []interface{}
 	if favOnly {
-		q += ` AND is_fav = 1`
+		q += ` AND o.is_fav = 1`
 	}
 	if isImage != nil {
 		if *isImage {
-			q += ` AND is_image = 1`
+			q += ` AND o.is_image = 1`
 		} else {
-			q += ` AND is_image = 0`
+			q += ` AND o.is_image = 0`
 		}
 	}
-	q += ` ORDER BY created_at DESC`
+	q += ` ORDER BY o.created_at DESC`
 	if limit > 0 {
 		q += ` LIMIT ?`
 		args = append(args, limit)
@@ -186,14 +199,56 @@ func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, er
 	defer rows.Close()
 	var clips []Clip
 	for rows.Next() {
-		var c Clip
-		if err := rows.Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
-			&c.IsImage, &c.IsFav, &c.SourceApp, &c.CreatedAt); err != nil {
+		c, err := scanClip(rows)
+		if err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)
 	}
 	return clips, rows.Err()
+}
+
+// SetTags sets the tags for a clip.
+func (s *Store) SetTags(id int64, tags string) error {
+	_, err := s.db.Exec(`UPDATE clips SET tags = ? WHERE id = ?`, tags, id)
+	return err
+}
+
+// AddTag appends a tag to a clip if not already present.
+func (s *Store) AddTag(id int64, tag string) error {
+	clip, err := s.GetByID(id)
+	if err != nil {
+		return err
+	}
+	tags := clip.Tags
+	if tags == "" {
+		tags = tag
+	} else {
+		parts := strings.Split(tags, ",")
+		for _, p := range parts {
+			if p == tag {
+				return nil // already has it
+			}
+		}
+		tags = tags + "," + tag
+	}
+	return s.SetTags(id, tags)
+}
+
+// RemoveTag removes a tag from a clip.
+func (s *Store) RemoveTag(id int64, tag string) error {
+	clip, err := s.GetByID(id)
+	if err != nil {
+		return err
+	}
+	parts := strings.Split(clip.Tags, ",")
+	var filtered []string
+	for _, p := range parts {
+		if p != tag && p != "" {
+			filtered = append(filtered, p)
+		}
+	}
+	return s.SetTags(id, strings.Join(filtered, ","))
 }
 
 // Delete removes a clip by ID.
@@ -217,12 +272,8 @@ func (s *Store) Count() (int, error) {
 
 // GetByID returns a single clip.
 func (s *Store) GetByID(id int64) (*Clip, error) {
-	var c Clip
-	err := s.db.QueryRow(
-		`SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, created_at
-		 FROM clips WHERE id = ?`, id,
-	).Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
-		&c.IsImage, &c.IsFav, &c.SourceApp, &c.CreatedAt)
+	row := s.db.QueryRow(`SELECT `+selectCols+` FROM clips WHERE id = ?`, id)
+	c, err := scanClip(row)
 	if err != nil {
 		return nil, err
 	}
