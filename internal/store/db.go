@@ -107,7 +107,7 @@ func (s *Store) List(limit int) ([]Clip, error) {
 	}
 	rows, err := s.db.Query(
 		`SELECT `+selectCols+` FROM clips o
-		 INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+		 INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
 		 ORDER BY o.created_at DESC LIMIT ?`, limit,
 	)
 	if err != nil {
@@ -133,7 +133,7 @@ func (s *Store) Search(keyword string, limit int) ([]Clip, error) {
 	kw := "%" + keyword + "%"
 	rows, err := s.db.Query(
 		`SELECT `+selectCols+` FROM clips o
-		 INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+		 INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
 		 WHERE o.content LIKE ?
 		 ORDER BY
 		   CASE
@@ -170,7 +170,7 @@ func (s *Store) ToggleFav(id int64) error {
 // ListFiltered returns clips with optional filters.
 func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, error) {
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
 	      WHERE 1=1`
 	var args []interface{}
 	if favOnly {
@@ -208,7 +208,7 @@ func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, er
 func (s *Store) ListByTag(tag string, limit int) ([]Clip, error) {
 	pattern := "%," + tag + ",%"
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
 	      WHERE (',' || o.tags || ',') LIKE ?
 	      ORDER BY o.created_at DESC`
 	args := []interface{}{pattern}
@@ -281,7 +281,7 @@ func (s *Store) GetSourceApps() ([]string, error) {
 // ListBySource returns clips from a specific source app.
 func (s *Store) ListBySource(source string, limit int) ([]Clip, error) {
 	q := `SELECT ` + selectCols + ` FROM clips o
-	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      INNER JOIN (SELECT MAX(clips.id) id FROM clips GROUP BY clips.content) m ON o.id = m.id
 	      WHERE o.source_app = ?
 	      ORDER BY o.created_at DESC`
 	args := []interface{}{source}

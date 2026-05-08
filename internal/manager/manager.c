@@ -201,8 +201,9 @@ static gboolean onWinDelete(GtkWidget *w, GdkEvent *ev, gpointer d) {
 
 static gboolean removeCopiedClass(gpointer data) {
     GtkWidget *card = GTK_WIDGET(data);
+    GtkWidget *inner = gtk_bin_get_child(GTK_BIN(card));
     gtk_style_context_remove_class(
-        gtk_widget_get_style_context(card), "copied");
+        gtk_widget_get_style_context(inner), "copied");
     return G_SOURCE_REMOVE;
 }
 
@@ -353,8 +354,9 @@ static gboolean onCardEvt(GtkWidget *card, GdkEventButton *ev, gpointer data) {
     if (ev->button == 3) {
         int id = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(card), "clip-id"));
         goCardClicked(id);
+        GtkWidget *inner = gtk_bin_get_child(GTK_BIN(card));
         gtk_style_context_add_class(
-            gtk_widget_get_style_context(card), "copied");
+            gtk_widget_get_style_context(inner), "copied");
         g_timeout_add(600, removeCopiedClass, card);
         return TRUE;
     }
@@ -716,14 +718,12 @@ void addClipCard(int id, const char *text, int textLen,
      *         └── action bar (♥ ... delete)
      */
 
-    GtkWidget *card = gtk_button_new();
-    gtk_button_set_relief(GTK_BUTTON(card), GTK_RELIEF_NONE);
-    gtk_widget_set_can_focus(card, FALSE);
-    gtk_style_context_add_class(
-        gtk_widget_get_style_context(card), "clip-card");
-    gtk_widget_set_size_request(card, 240, 260);
+    GtkWidget *card = gtk_event_box_new();
 
     GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_style_context_add_class(
+        gtk_widget_get_style_context(inner), "clip-card");
+    gtk_widget_set_size_request(inner, 240, 260);
     gtk_container_add(GTK_CONTAINER(card), inner);
 
     /* store all data on the button */
