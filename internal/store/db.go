@@ -260,6 +260,51 @@ func (s *Store) GetAllTags() ([]string, error) {
 	return result, rows.Err()
 }
 
+// GetSourceApps returns all distinct source app names.
+func (s *Store) GetSourceApps() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT source_app FROM clips WHERE source_app != '' ORDER BY source_app`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sources []string
+	for rows.Next() {
+		var src string
+		if err := rows.Scan(&src); err != nil {
+			continue
+		}
+		sources = append(sources, src)
+	}
+	return sources, rows.Err()
+}
+
+// ListBySource returns clips from a specific source app.
+func (s *Store) ListBySource(source string, limit int) ([]Clip, error) {
+	q := `SELECT ` + selectCols + ` FROM clips o
+	      INNER JOIN (SELECT MAX(id) id FROM clips GROUP BY content) m ON o.id = m.id
+	      WHERE o.source_app = ?
+	      ORDER BY o.created_at DESC`
+	args := []interface{}{source}
+	if limit > 0 {
+		q += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var clips []Clip
+	for rows.Next() {
+		c, err := scanClip(rows)
+		if err != nil {
+			return nil, err
+		}
+		clips = append(clips, c)
+	}
+	return clips, rows.Err()
+}
+
 func (s *Store) SetTags(id int64, tags string) error {
 	_, err := s.db.Exec(`UPDATE clips SET tags = ? WHERE id = ?`, tags, id)
 	return err

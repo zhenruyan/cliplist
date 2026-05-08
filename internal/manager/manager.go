@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	mgrMu    sync.Mutex
-	mgrStore *store.Store
-	mgrClips []store.Clip
-	mgrTags  []string // unique tags for sidebar
+	mgrMu      sync.Mutex
+	mgrStore   *store.Store
+	mgrClips   []store.Clip
+	mgrTags    []string // unique tags for sidebar
+	mgrSources []string // unique source apps for sidebar
 )
 
 //export goCategoryChanged
@@ -166,6 +167,25 @@ func goTagGroupChanged(cTag *C.char) {
 	}()
 }
 
+//export goSourceGroupChanged
+func goSourceGroupChanged(cSource *C.char) {
+	if mgrStore == nil {
+		return
+	}
+	source := C.GoString(cSource)
+	go func() {
+		clips, err := mgrStore.ListBySource(source, 200)
+		if err != nil {
+			log.Printf("[manager] list by source %q: %v", source, err)
+			return
+		}
+		mgrMu.Lock()
+		mgrClips = clips
+		mgrMu.Unlock()
+		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
+	}()
+}
+
 //export goRebuildGrid
 func goRebuildGrid() {
 	mgrMu.Lock()
@@ -179,18 +199,32 @@ func goRebuildGrid() {
 		return
 	}
 	for _, c := range clips {
+		/* source app */
+		cSource := C.CString(c.SourceApp)
+		defer C.free(unsafe.Pointer(cSource))
+
+		/* time: just HH:MM */
+		timeStr := ""
+		if !c.CreatedAt.IsZero() {
+			timeStr = c.CreatedAt.Format("15:04")
+		}
+		cTime := C.CString(timeStr)
+		defer C.free(unsafe.Pointer(cTime))
+
+		/* tags */
+		cTags := C.CString(c.Tags)
+		defer C.free(unsafe.Pointer(cTags))
+
 		if c.IsImage {
 			cPath := C.CString(c.ImagePath)
-			cTags := C.CString(c.Tags)
-			C.addClipCard(C.int(c.ID), nil, 0, 1, cPath, boolCint(c.IsFav), cTags)
-			C.free(unsafe.Pointer(cPath))
-			C.free(unsafe.Pointer(cTags))
+			defer C.free(unsafe.Pointer(cPath))
+			C.addClipCard(C.int(c.ID), nil, 0, 1, cPath,
+				boolCint(c.IsFav), cTags, cSource, cTime)
 		} else {
 			cText := C.CString(c.Content)
-			cTags := C.CString(c.Tags)
-			C.addClipCard(C.int(c.ID), cText, C.int(len(c.Content)), 0, nil, boolCint(c.IsFav), cTags)
-			C.free(unsafe.Pointer(cText))
-			C.free(unsafe.Pointer(cTags))
+			defer C.free(unsafe.Pointer(cText))
+			C.addClipCard(C.int(c.ID), cText, C.int(len(c.Content)), 0, nil,
+				boolCint(c.IsFav), cTags, cSource, cTime)
 		}
 	}
 }
@@ -210,6 +244,21 @@ func goRebuildTagSidebar() {
 	}
 }
 
+//export goRebuildSourceSidebar
+func goRebuildSourceSidebar() {
+	mgrMu.Lock()
+	sources := make([]string, len(mgrSources))
+	copy(sources, mgrSources)
+	mgrMu.Unlock()
+
+	C.clearSourceSidebar()
+	for _, s := range sources {
+		cs := C.CString(s)
+		C.addSourceButton(cs)
+		C.free(unsafe.Pointer(cs))
+	}
+}
+
 func boolCint(b bool) C.int {
 	if b {
 		return 1
@@ -217,7 +266,7 @@ func boolCint(b bool) C.int {
 	return 0
 }
 
-// collectTags extracts unique tags from clips and the DB.
+// collectTags extracts unique tags from the DB.
 func collectTags() {
 	tags, err := mgrStore.GetAllTags()
 	if err != nil {
@@ -226,6 +275,18 @@ func collectTags() {
 	}
 	mgrMu.Lock()
 	mgrTags = tags
+	mgrMu.Unlock()
+}
+
+// collectSources extracts unique source apps from the DB.
+func collectSources() {
+	sources, err := mgrStore.GetSourceApps()
+	if err != nil {
+		log.Printf("[manager] get sources: %v", err)
+		return
+	}
+	mgrMu.Lock()
+	mgrSources = sources
 	mgrMu.Unlock()
 }
 
@@ -240,9 +301,11 @@ func reloadAndRebuild() {
 	mgrMu.Unlock()
 
 	collectTags()
+	collectSources()
 
 	C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 	C.g_idle_add(C.GSourceFunc(C.rebuildTagSidebarIdle), nil)
+	C.g_idle_add(C.GSourceFunc(C.rebuildSourceSidebarIdle), nil)
 }
 
 // Init creates the GTK manager window. Must be called from main goroutine.
@@ -268,10 +331,12 @@ func Run(db *store.Store) {
 	}
 
 	collectTags()
+	collectSources()
 
 	go func() {
 		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 		C.g_idle_add(C.GSourceFunc(C.rebuildTagSidebarIdle), nil)
+		C.g_idle_add(C.GSourceFunc(C.rebuildSourceSidebarIdle), nil)
 		C.g_idle_add(C.GSourceFunc(C.showManagerIdle), nil)
 	}()
 

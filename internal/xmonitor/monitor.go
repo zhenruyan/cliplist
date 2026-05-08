@@ -194,7 +194,7 @@ func GetImageClipboard() ([]byte, error) {
 }
 
 func getSourceApp() string {
-	cmd := exec.Command("xdotool", "getactivewindow", "getwindowname")
+	cmd := exec.Command("xdotool", "getactivewindow", "getwindowclassname")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
