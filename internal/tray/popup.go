@@ -28,12 +28,18 @@ static gboolean on_key_press(GtkWidget *w, GdkEventKey *ev, gpointer data) {
         goPopupClosed();
         return TRUE;
     }
-    if (ev->keyval == GDK_KEY_Down || ev->keyval == GDK_KEY_Up ||
-        ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) {
+    if (ev->keyval == GDK_KEY_Down || ev->keyval == GDK_KEY_Up) {
         gtk_widget_grab_focus(g_listbox);
         GdkEvent *copy = gdk_event_copy((GdkEvent*)ev);
         gtk_widget_event(g_listbox, copy);
         gdk_event_free(copy);
+        return TRUE;
+    }
+    if (ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) {
+        GtkListBoxRow *row = gtk_list_box_get_selected_row(GTK_LIST_BOX(g_listbox));
+        if (row) {
+            g_signal_emit_by_name(g_listbox, "row-activated", row);
+        }
         return TRUE;
     }
     return FALSE;
