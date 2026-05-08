@@ -1,5 +1,6 @@
 BINARY_NAME=cliplist
 DAEMON_NAME=cliplistd
+MGR_NAME=cliplist-mgr
 PREFIX=/usr/local
 BINDIR=$(PREFIX)/bin
 
@@ -12,21 +13,25 @@ CGO_ENABLED=1
 
 all: build
 
-build: build-daemon build-cli
+build: build-daemon build-mgr build-cli
 
 build-daemon:
 	CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(GOFLAGS) -o $(DAEMON_NAME) ./cmd/cliplistd
+
+build-mgr:
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(GOFLAGS) -o $(MGR_NAME) ./cmd/cliplist-mgr
 
 build-cli:
 	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) ./cmd/cliplist
 
 clean:
-	rm -f $(BINARY_NAME) $(DAEMON_NAME)
+	rm -f $(BINARY_NAME) $(DAEMON_NAME) $(MGR_NAME)
 	$(GO) clean
 
 install: build
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(DAEMON_NAME) $(DESTDIR)$(BINDIR)/$(DAEMON_NAME)
+	install -m 755 $(MGR_NAME) $(DESTDIR)$(BINDIR)/$(MGR_NAME)
 	install -m 755 $(BINARY_NAME) $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	install -d $(DESTDIR)/usr/share/icons/hicolor/scalable/apps
 	install -m 644 assets/icons/cliplist.svg $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/cliplist.svg
@@ -35,6 +40,7 @@ install: build
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(DAEMON_NAME)
+	rm -f $(DESTDIR)$(BINDIR)/$(MGR_NAME)
 	rm -f $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	rm -f $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/cliplist.svg
 	rm -f $(DESTDIR)/etc/xdg/autostart/cliplist.desktop

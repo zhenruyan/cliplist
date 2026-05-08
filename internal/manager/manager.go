@@ -1,11 +1,14 @@
-package tray
+package manager
 
 /*
+#cgo pkg-config: gtk+-3.0
+
 #include "manager.h"
 */
 import "C"
 import (
 	"log"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -87,7 +90,6 @@ func goCardClicked(id C.int) {
 		return
 	}
 	if clip.IsImage {
-		// TODO: copy image to clipboard
 		log.Printf("[manager] image copy not yet supported")
 		return
 	}
@@ -127,7 +129,6 @@ func goRebuildGrid() {
 
 	C.clearGrid()
 	if len(clips) == 0 {
-		// show empty placeholder handled by C side if needed
 		return
 	}
 	for _, c := range clips {
@@ -150,34 +151,41 @@ func boolCint(b bool) C.int {
 	return 0
 }
 
-// InitManager creates the GTK manager window. Call once from main goroutine.
-func InitManager(db *store.Store) {
+// Init creates the GTK manager window. Must be called from main goroutine.
+func Init(db *store.Store) {
 	mgrMu.Lock()
 	mgrStore = db
 	mgrMu.Unlock()
+
+	runtime.LockOSThread()
+	C.gtk_init(nil, nil)
 	C.initManagerWindow()
 }
 
-// HandleManagerOpen loads clips and shows the manager. Safe to call from any goroutine.
-func HandleManagerOpen(db *store.Store) {
-	mgrMu.Lock()
-	mgrStore = db
-	mgrMu.Unlock()
-	go func() {
-		clips, err := db.List(200)
-		if err != nil {
-			log.Printf("[manager] list: %v", err)
-			return
-		}
+// Run loads clips and enters the GTK main loop. Blocks until Stop() is called.
+func Run(db *store.Store) {
+	// Preload clips
+	clips, err := db.List(200)
+	if err != nil {
+		log.Printf("[manager] preload: %v", err)
+	} else {
 		mgrMu.Lock()
 		mgrClips = clips
 		mgrMu.Unlock()
+	}
+
+	// Build grid, then show window
+	go func() {
 		C.g_idle_add(C.GSourceFunc(C.rebuildGridIdle), nil)
 		C.g_idle_add(C.GSourceFunc(C.showManagerIdle), nil)
 	}()
+
+	log.Println("[manager] entering GTK main loop")
+	C.gtk_main()
+	log.Println("[manager] exited")
 }
 
-// ToggleManager toggles the manager window visibility. Safe from any goroutine.
-func ToggleManager() {
-	C.g_idle_add(C.GSourceFunc(C.toggleManagerIdle), nil)
+// Stop exits the GTK main loop.
+func Stop() {
+	C.g_idle_add(C.GSourceFunc(C.stopIdle), nil)
 }

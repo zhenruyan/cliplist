@@ -443,6 +443,12 @@ gboolean toggleManagerIdle(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
+gboolean stopIdle(gpointer data) {
+    (void)data;
+    gtk_main_quit();
+    return G_SOURCE_REMOVE;
+}
+
 const char *getManagerSearchText(void) {
     return gtk_entry_get_text(GTK_ENTRY(mgrSearch));
 }

@@ -29,6 +29,7 @@ mkdir -p "$DEB_DIR/etc/xdg/autostart"
 
 echo "==> Installing files..."
 install -m 755 cliplistd  "$DEB_DIR/usr/bin/cliplistd"
+install -m 755 cliplist-mgr  "$DEB_DIR/usr/bin/cliplist-mgr"
 install -m 755 cliplist   "$DEB_DIR/usr/bin/cliplist"
 install -m 644 assets/cliplist.desktop "$DEB_DIR/usr/share/applications/cliplist.desktop"
 install -m 644 assets/cliplist.desktop "$DEB_DIR/etc/xdg/autostart/cliplist.desktop"
@@ -83,6 +84,7 @@ case "$1" in
     remove|upgrade)
         # Stop the daemon if running
         pkill -f cliplistd 2>/dev/null || true
+        pkill -f cliplist-mgr 2>/dev/null || true
         ;;
 esac
 

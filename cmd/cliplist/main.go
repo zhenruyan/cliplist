@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -74,7 +75,13 @@ func main() {
 		req = ipc.Request{Action: "settings"}
 
 	case "manager", "m":
-		req = ipc.Request{Action: "manager"}
+		cmd := exec.Command("cliplist-mgr")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fatal("manager: %v", err)
+		}
+		return
 
 	case "clear":
 		req = ipc.Request{Action: "clear"}

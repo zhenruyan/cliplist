@@ -24,6 +24,7 @@ void addClipCard(int id, const char *text, int textLen,
 gboolean rebuildGridIdle(gpointer data);
 gboolean showManagerIdle(gpointer data);
 gboolean toggleManagerIdle(gpointer data);
+gboolean stopIdle(gpointer data);
 
 /* Text access */
 const char *getManagerSearchText(void);

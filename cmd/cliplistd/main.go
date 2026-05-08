@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -96,7 +97,6 @@ func main() {
 	tray.SetCurrent(tr)
 	tray.SetPopupStore(db)
 	tray.SetPopupMaxDisplay(cfg.MaxHistory)
-	tray.InitManager(db)
 
 	go handleTrayEvents(tr, db, newClipCh, cfg)
 
@@ -169,7 +169,7 @@ func handleTrayEvents(tr *tray.Tray, db *store.Store, newClipCh chan struct{}, c
 			openSettings(cfg)
 
 		case <-tr.ManagerCh:
-			tray.HandleManagerOpen(db)
+			launchManager()
 
 		case <-tr.QuitCh:
 			log.Println("tray quit")
@@ -240,6 +240,15 @@ func openSettings(cfg *config.Config) {
 	)
 }
 
+func launchManager() {
+	cmd := exec.Command("cliplist-mgr")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		log.Printf("[manager] launch: %v", err)
+	}
+}
+
 func handleIPC(req ipc.Request, db *store.Store, cfg *config.Config) ipc.Response {
 	switch req.Action {
 	case "list":
@@ -294,10 +303,6 @@ func handleIPC(req ipc.Request, db *store.Store, cfg *config.Config) ipc.Respons
 
 	case "settings":
 		openSettings(cfg)
-		return ipc.Response{OK: true}
-
-	case "manager":
-		tray.HandleManagerOpen(db)
 		return ipc.Response{OK: true}
 
 	default:
