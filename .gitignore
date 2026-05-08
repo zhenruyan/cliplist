@@ -1,0 +1,29 @@
+# Binaries
+cliplist
+cliplistd
+*.exe
+
+# Build artifacts
+build/
+*.deb
+*.rpm
+*.tar.gz
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (user data)
+*.db
+*.db-wal
+*.db-shm

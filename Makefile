@@ -48,5 +48,8 @@ test:
 fmt:
 	$(GO) fmt ./...
 
+deb:
+	./scripts/build-deb.sh
+
 vet:
 	$(GO) vet ./...
