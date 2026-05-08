@@ -28,12 +28,15 @@ install: build
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(DAEMON_NAME) $(DESTDIR)$(BINDIR)/$(DAEMON_NAME)
 	install -m 755 $(BINARY_NAME) $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
+	install -d $(DESTDIR)/usr/share/icons/hicolor/scalable/apps
+	install -m 644 assets/icons/cliplist.svg $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/cliplist.svg
 	install -d $(DESTDIR)/etc/xdg/autostart
 	install -m 644 assets/cliplist.desktop $(DESTDIR)/etc/xdg/autostart/cliplist.desktop
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(DAEMON_NAME)
 	rm -f $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
+	rm -f $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/cliplist.svg
 	rm -f $(DESTDIR)/etc/xdg/autostart/cliplist.desktop
 
 run-daemon: build-daemon
