@@ -58,9 +58,12 @@ echo "==> Generating postinst..."
 cat > "$DEB_DIR/DEBIAN/postinst" << 'EOF'
 #!/bin/sh
 set -e
-
 case "$1" in
     configure)
+        # Update icon cache so the tray icon is found
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+        fi
         echo "Cliplist installed. Run 'cliplistd' to start the daemon."
         echo "Run 'cliplist settings' or click Settings in the tray menu to configure."
         ;;

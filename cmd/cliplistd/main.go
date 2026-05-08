@@ -20,7 +20,7 @@ import (
 	"github.com/user/cliplist/internal/xmonitor"
 )
 
-const defaultIcon = "edit-paste"
+const defaultIcon = "cliplist"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -298,6 +298,7 @@ func handleIPC(req ipc.Request, db *store.Store, cfg *config.Config) ipc.Respons
 }
 
 func findIcon() string {
+	// 1) Development: relative to project root
 	localPaths := []string{
 		filepath.Join("assets", "icons", "cliplist.svg"),
 		filepath.Join("assets", "icons", "cliplist.png"),
@@ -308,5 +309,18 @@ func findIcon() string {
 			return abs
 		}
 	}
+
+	// 2) System-installed icon (deb / make install)
+	systemPaths := []string{
+		"/usr/share/icons/hicolor/scalable/apps/cliplist.svg",
+		"/usr/local/share/icons/hicolor/scalable/apps/cliplist.svg",
+	}
+	for _, p := range systemPaths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	// 3) Let AppIndicator resolve by icon-theme name
 	return defaultIcon
 }
