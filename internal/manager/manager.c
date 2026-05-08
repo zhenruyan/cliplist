@@ -756,19 +756,24 @@ void addClipCard(int id, const char *text, int textLen,
 
     /* ── preview ── */
     if (isImage && imagePath) {
+        GtkWidget *imgBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+        gtk_widget_set_size_request(imgBox, -1, 100);
+        gtk_box_pack_start(GTK_BOX(inner), imgBox, FALSE, FALSE, 0);
         GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(
             imagePath, 220, 100, TRUE, NULL);
         if (pb) {
             GtkWidget *img = gtk_image_new_from_pixbuf(pb);
             g_object_unref(pb);
             gtk_widget_set_halign(img, GTK_ALIGN_CENTER);
-            gtk_box_pack_start(GTK_BOX(inner), img, FALSE, FALSE, 0);
+            gtk_widget_set_valign(img, GTK_ALIGN_CENTER);
+            gtk_container_add(GTK_CONTAINER(imgBox), img);
         } else {
             GtkWidget *ph = gtk_label_new(NULL);
             gtk_label_set_markup(GTK_LABEL(ph),
                 "<span foreground='#aaaaaa' font='10'>[image]</span>");
             gtk_widget_set_halign(ph, GTK_ALIGN_CENTER);
-            gtk_box_pack_start(GTK_BOX(inner), ph, FALSE, FALSE, 2);
+            gtk_widget_set_valign(ph, GTK_ALIGN_CENTER);
+            gtk_container_add(GTK_CONTAINER(imgBox), ph);
         }
     } else if (text && textLen > 0) {
         int len = textLen < 300 ? textLen : 300;
@@ -782,6 +787,7 @@ void addClipCard(int id, const char *text, int textLen,
         gtk_label_set_lines(GTK_LABEL(label), 5);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
         gtk_label_set_max_width_chars(GTK_LABEL(label), 28);
+        gtk_widget_set_size_request(label, -1, 100);
         gtk_style_context_add_class(
             gtk_widget_get_style_context(label), "card-text");
         gtk_box_pack_start(GTK_BOX(inner), label, FALSE, FALSE, 0);
