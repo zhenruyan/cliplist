@@ -74,7 +74,7 @@ func (s *Store) migrate() error {
 	return nil
 }
 
-const selectCols = `id, content, image_path, mime_type, is_image, is_fav, source_app, tags, created_at`
+const selectCols = `o.id, o.content, o.image_path, o.mime_type, o.is_image, o.is_fav, o.source_app, o.tags, o.created_at`
 
 func scanClip(sc interface{ Scan(...interface{}) error }) (Clip, error) {
 	var c Clip
@@ -272,7 +272,7 @@ func (s *Store) Count() (int, error) {
 
 // GetByID returns a single clip.
 func (s *Store) GetByID(id int64) (*Clip, error) {
-	row := s.db.QueryRow(`SELECT `+selectCols+` FROM clips WHERE id = ?`, id)
+	row := s.db.QueryRow(`SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, tags, created_at FROM clips WHERE id = ?`, id)
 	c, err := scanClip(row)
 	if err != nil {
 		return nil, err
