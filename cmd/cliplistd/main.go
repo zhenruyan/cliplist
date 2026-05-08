@@ -96,6 +96,7 @@ func main() {
 	tray.SetCurrent(tr)
 	tray.SetPopupStore(db)
 	tray.SetPopupMaxDisplay(cfg.MaxHistory)
+	tray.InitManager(db)
 
 	go handleTrayEvents(tr, db, newClipCh, cfg)
 
@@ -166,6 +167,9 @@ func handleTrayEvents(tr *tray.Tray, db *store.Store, newClipCh chan struct{}, c
 
 		case <-tr.SettingsCh:
 			openSettings(cfg)
+
+		case <-tr.ManagerCh:
+			tray.HandleManagerOpen(db)
 
 		case <-tr.QuitCh:
 			log.Println("tray quit")
@@ -290,6 +294,10 @@ func handleIPC(req ipc.Request, db *store.Store, cfg *config.Config) ipc.Respons
 
 	case "settings":
 		openSettings(cfg)
+		return ipc.Response{OK: true}
+
+	case "manager":
+		tray.HandleManagerOpen(db)
 		return ipc.Response{OK: true}
 
 	default:

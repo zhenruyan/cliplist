@@ -159,6 +159,43 @@ func (s *Store) ToggleFav(id int64) error {
 	return err
 }
 
+// ListFiltered returns clips with optional filters. limit=0 means no limit.
+// favOnly=true filters to favorites only. isImage nil=any, &true=images, &false=text.
+func (s *Store) ListFiltered(limit int, favOnly bool, isImage *bool) ([]Clip, error) {
+	q := `SELECT id, content, image_path, mime_type, is_image, is_fav, source_app, created_at FROM clips WHERE 1=1`
+	var args []interface{}
+	if favOnly {
+		q += ` AND is_fav = 1`
+	}
+	if isImage != nil {
+		if *isImage {
+			q += ` AND is_image = 1`
+		} else {
+			q += ` AND is_image = 0`
+		}
+	}
+	q += ` ORDER BY created_at DESC`
+	if limit > 0 {
+		q += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var clips []Clip
+	for rows.Next() {
+		var c Clip
+		if err := rows.Scan(&c.ID, &c.Content, &c.ImagePath, &c.MimeType,
+			&c.IsImage, &c.IsFav, &c.SourceApp, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		clips = append(clips, c)
+	}
+	return clips, rows.Err()
+}
+
 // Delete removes a clip by ID.
 func (s *Store) Delete(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM clips WHERE id = ?`, id)
