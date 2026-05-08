@@ -33,7 +33,7 @@ static const char *MANAGER_CSS =
 "/* ── card (on EventBox) ──────────────── */\n"
 ".clip-card {\n"
 "  background: #ffffff; border: 1px solid #e0e0e6;\n"
-"  border-radius: 8px; padding: 8px;\n"
+"  border-radius: 10px; padding: 3px;\n"
 "}\n"
 ".clip-card:hover {\n"
 "  border-color: #c8c8d4;\n"
@@ -43,7 +43,7 @@ static const char *MANAGER_CSS =
 "  background: #f4faf4;\n"
 "}\n"
 ".card-text {\n"
-"  font-size: 11px; color: #333333;\n"
+"  font-size: 12px; color: #333333;\n"
 "}\n"
 "/* ── tags ────────────────────────────── */\n"
 ".tag-pill {\n"
@@ -628,9 +628,9 @@ void addClipCard(int id, const char *text, int textLen,
      */
     GtkWidget *card = gtk_event_box_new();
     gtk_style_context_add_class(gtk_widget_get_style_context(card), "clip-card");
-    gtk_widget_set_size_request(card, 160, -1);
+    gtk_widget_set_size_request(card, 240, 260);
 
-    GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
     gtk_container_add(GTK_CONTAINER(card), inner);
 
     /* store all data on the EventBox */
@@ -653,7 +653,7 @@ void addClipCard(int id, const char *text, int textLen,
     /* ── preview ── */
     if (isImage && imagePath) {
         GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(
-            imagePath, 144, 56, TRUE, NULL);
+            imagePath, 220, 100, TRUE, NULL);
         if (pb) {
             GtkWidget *img = gtk_image_new_from_pixbuf(pb);
             g_object_unref(pb);
@@ -675,7 +675,7 @@ void addClipCard(int id, const char *text, int textLen,
         gtk_label_set_yalign(GTK_LABEL(label), 0);
         gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
         gtk_label_set_line_wrap_mode(GTK_LABEL(label), PANGO_WRAP_WORD_CHAR);
-        gtk_label_set_lines(GTK_LABEL(label), 3);
+        gtk_label_set_lines(GTK_LABEL(label), 5);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
         gtk_style_context_add_class(gtk_widget_get_style_context(label), "card-text");
         gtk_box_pack_start(GTK_BOX(inner), label, FALSE, FALSE, 0);
