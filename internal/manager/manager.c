@@ -2,6 +2,7 @@
  * manager.c — Clipboard manager window (GTK3)
  *
  * Card grid with right-click copy, double-click detail, tag sidebar.
+ * Cards are GtkButton widgets (proper windowed widgets with full CSS support).
  */
 
 #include "manager.h"
@@ -30,17 +31,32 @@ static const char *MANAGER_CSS =
 ".search-entry:focus { border-color: #aaaacc; }\n"
 "/* ── grid ────────────────────────────── */\n"
 ".clips-grid { padding: 12px; background: #f0f0f3; }\n"
-"/* ── card (on EventBox) ──────────────── */\n"
+"/* ── card (GtkButton) ────────────────── */\n"
 ".clip-card {\n"
-"  background: #ffffff; border: 1px solid #e0e0e6;\n"
-"  border-radius: 10px; padding: 3px;\n"
+"  background: #ffffff;\n"
+"  background-image: none;\n"
+"  border: 1px solid #e0e0e6;\n"
+"  border-radius: 10px;\n"
+"  padding: 3px;\n"
+"  box-shadow: none;\n"
+"  outline: none;\n"
+"  min-width: 240px;\n"
+"  min-height: 260px;\n"
 "}\n"
 ".clip-card:hover {\n"
+"  background: #ffffff;\n"
+"  background-image: none;\n"
 "  border-color: #c8c8d4;\n"
+"}\n"
+".clip-card:active {\n"
+"  background: #ffffff;\n"
+"  background-image: none;\n"
+"  border-color: #e0e0e6;\n"
 "}\n"
 ".clip-card.copied {\n"
 "  border-color: #6ab070;\n"
 "  background: #f4faf4;\n"
+"  background-image: none;\n"
 "}\n"
 ".card-text {\n"
 "  font-size: 12px; color: #333333;\n"
@@ -311,17 +327,19 @@ static gboolean onCardEvt(GtkWidget *card, GdkEventButton *ev, gpointer data) {
     }
 
     /* right-click → copy */
-    if (ev->button != 3) return FALSE;
+    if (ev->button == 3) {
+        int id = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(card), "clip-id"));
+        goCardClicked(id);
+        gtk_style_context_add_class(gtk_widget_get_style_context(card), "copied");
+        g_timeout_add(600, removeCopiedClass, card);
+        return TRUE;
+    }
 
-    int id = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(card), "clip-id"));
-    goCardClicked(id);
-    GtkWidget *inner = gtk_bin_get_child(GTK_BIN(card));
-    gtk_style_context_add_class(gtk_widget_get_style_context(inner), "copied");
-    g_timeout_add(600, removeCopiedClass, inner);
+    /* left single-click → consume, no action */
     return TRUE;
 }
 
-/* ── Heart / delete (receive cardEvt as data) ─────────────────── */
+/* ── Heart / delete (receive card as data) ────────────────────── */
 
 static gboolean onHeartEvt(GtkWidget *evtBox, GdkEventButton *ev, gpointer data) {
     (void)evtBox; (void)ev;
@@ -619,22 +637,26 @@ void addClipCard(int id, const char *text, int textLen,
                  const char *tags)
 {
     /*
-     * card = GtkEventBox with .clip-card styling
+     * card = GtkButton (.clip-card)
      *   └── inner = GtkBox (vertical layout)
-     *         ├── preview (label or image)
+     *         ├── preview
      *         ├── tag bar
      *         └── action bar
      *
-     * All data stored on the EventBox. No parent traversals needed.
+     * GtkButton has its own GdkWindow → CSS rendering works properly.
+     * size_request + min-width/min-height in CSS → FlowBox respects size.
+     * button-press-event consumed → no click animation.
      */
-    GtkWidget *card = gtk_event_box_new();
+
+    GtkWidget *card = gtk_button_new();
+    gtk_button_set_relief(GTK_BUTTON(card), GTK_RELIEF_NONE);
+    gtk_widget_set_can_focus(card, FALSE);
+    gtk_style_context_add_class(gtk_widget_get_style_context(card), "clip-card");
 
     GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-    gtk_style_context_add_class(gtk_widget_get_style_context(inner), "clip-card");
-    gtk_widget_set_size_request(inner, 240, 260);
     gtk_container_add(GTK_CONTAINER(card), inner);
 
-    /* store all data on the EventBox */
+    /* store all data on the button */
     g_object_set_data(G_OBJECT(card), "clip-id",       GINT_TO_POINTER(id));
     g_object_set_data(G_OBJECT(card), "clip-is-image",  GINT_TO_POINTER(isImage));
     g_object_set_data(G_OBJECT(card), "is-fav",         GINT_TO_POINTER(isFav));
@@ -724,7 +746,7 @@ void addClipCard(int id, const char *text, int textLen,
     gtk_container_add(GTK_CONTAINER(heartEvt), heart);
     gtk_widget_set_margin_start(heartEvt, 2);
     g_signal_connect(heartEvt, "button-press-event",
-        G_CALLBACK(onHeartEvt), card);          /* pass card */
+        G_CALLBACK(onHeartEvt), card);
     gtk_box_pack_start(GTK_BOX(actionBar), heartEvt, FALSE, FALSE, 0);
     g_object_set_data(G_OBJECT(card), "heart-widget", heart);
 
@@ -738,7 +760,7 @@ void addClipCard(int id, const char *text, int textLen,
     gtk_button_set_relief(GTK_BUTTON(delBtn), GTK_RELIEF_NONE);
     gtk_style_context_add_class(gtk_widget_get_style_context(delBtn), "card-del");
     g_signal_connect(delBtn, "clicked",
-        G_CALLBACK(onDelClick), card);          /* pass card */
+        G_CALLBACK(onDelClick), card);
     gtk_box_pack_start(GTK_BOX(actionBar), delBtn, FALSE, FALSE, 0);
 
     /* right-click → copy, double-click → detail */
