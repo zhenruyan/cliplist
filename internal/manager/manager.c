@@ -652,6 +652,9 @@ void addClipCard(int id, const char *text, int textLen,
     gtk_button_set_relief(GTK_BUTTON(card), GTK_RELIEF_NONE);
     gtk_widget_set_can_focus(card, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(card), "clip-card");
+    gtk_widget_set_size_request(card, 240, 260);
+    gtk_widget_set_halign(card, GTK_ALIGN_START);
+    gtk_widget_set_valign(card, GTK_ALIGN_START);
 
     GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
     gtk_container_add(GTK_CONTAINER(card), inner);
@@ -700,6 +703,7 @@ void addClipCard(int id, const char *text, int textLen,
         gtk_label_set_line_wrap_mode(GTK_LABEL(label), PANGO_WRAP_WORD_CHAR);
         gtk_label_set_lines(GTK_LABEL(label), 5);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+        gtk_label_set_max_width_chars(GTK_LABEL(label), 28);
         gtk_style_context_add_class(gtk_widget_get_style_context(label), "card-text");
         gtk_box_pack_start(GTK_BOX(inner), label, FALSE, FALSE, 0);
     }
