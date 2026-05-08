@@ -106,6 +106,10 @@ cliplist (CLI)
 └── IPC Client      — sends commands to daemon via Unix socket
 ```
 
+## Author
+
+pkold.com — [github.com/zhenruyan](https://github.com/zhenruyan)
+
 ## License
 
 MIT

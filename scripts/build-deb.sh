@@ -5,7 +5,7 @@ set -e
 PACKAGE="cliplist"
 VERSION="${1:-1.0.0}"
 ARCH="amd64"
-MAINTAINER="Cliplist Contributors"
+MAINTAINER="pkold.com <admin@pkold.com>"
 DESCRIPTION="Clipboard history manager for Linux (XFCE4 + Xorg)"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
