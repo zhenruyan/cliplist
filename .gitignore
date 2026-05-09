@@ -1,7 +1,6 @@
 # Binaries
 /cliplist
 /cliplistd
-/cliplist-mgr
 *.exe
 
 # Build artifacts

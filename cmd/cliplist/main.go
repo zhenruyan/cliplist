@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -73,15 +72,6 @@ func main() {
 
 	case "settings":
 		req = ipc.Request{Action: "settings"}
-
-	case "manager", "m":
-		cmd := exec.Command("cliplist-mgr")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fatal("manager: %v", err)
-		}
-		return
 
 	case "clear":
 		req = ipc.Request{Action: "clear"}
@@ -159,7 +149,6 @@ func printUsage() {
 
 Usage:
   cliplist pop            Toggle popup window
-  cliplist manager        Open clipboard manager window
   cliplist settings       Open settings panel
   cliplist list [n]       Show last n clips (default 20)
   cliplist search <q>    Search clips by keyword

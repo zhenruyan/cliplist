@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -168,9 +167,6 @@ func handleTrayEvents(tr *tray.Tray, db *store.Store, newClipCh chan struct{}, c
 		case <-tr.SettingsCh:
 			openSettings(cfg)
 
-		case <-tr.ManagerCh:
-			launchManager()
-
 		case <-tr.QuitCh:
 			log.Println("tray quit")
 			os.Exit(0)
@@ -238,15 +234,6 @@ func openSettings(cfg *config.Config) {
 			}
 		},
 	)
-}
-
-func launchManager() {
-	cmd := exec.Command("cliplist-mgr")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		log.Printf("[manager] launch: %v", err)
-	}
 }
 
 func handleIPC(req ipc.Request, db *store.Store, cfg *config.Config) ipc.Response {

@@ -12,7 +12,6 @@ extern void onClearActivate(GtkMenuItem *item, gpointer data);
 extern void onQuitActivate(GtkMenuItem *item, gpointer data);
 extern void onSearchActivate(GtkMenuItem *item, gpointer data);
 extern void onSettingsActivate(GtkMenuItem *item, gpointer data);
-extern void onManagerActivate(GtkMenuItem *item, gpointer data);
 
 static AppIndicator *indicator = NULL;
 static GtkWidget *menu = NULL;
@@ -73,13 +72,6 @@ static void addSearchItem(const char *label) {
 static void addSettingsItem(const char *label) {
     GtkWidget *item = gtk_menu_item_new_with_label(label);
     g_signal_connect(item, "activate", G_CALLBACK(onSettingsActivate), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    gtk_widget_show(item);
-}
-
-static void addManagerItem(const char *label) {
-    GtkWidget *item = gtk_menu_item_new_with_label(label);
-    g_signal_connect(item, "activate", G_CALLBACK(onManagerActivate), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     gtk_widget_show(item);
 }
@@ -153,7 +145,6 @@ type Tray struct {
 	ClearCh    chan struct{} // receives when user clicks "Clear History"
 	QuitCh     chan struct{} // receives when user clicks "Quit"
 	SettingsCh chan struct{} // receives when user clicks "Settings"
-	ManagerCh  chan struct{} // receives when user clicks "Manager"
 
 	mu    sync.Mutex
 	clips []MenuClip
@@ -166,7 +157,6 @@ func New() *Tray {
 		ClearCh:    make(chan struct{}, 1),
 		QuitCh:     make(chan struct{}, 1),
 		SettingsCh: make(chan struct{}, 1),
-		ManagerCh:  make(chan struct{}, 1),
 	}
 }
 
@@ -250,10 +240,6 @@ func (t *Tray) rebuildMenu() {
 	C.addSettingsItem(sS)
 	C.free(unsafe.Pointer(sS))
 
-	sM := C.CString("Manager")
-	C.addManagerItem(sM)
-	C.free(unsafe.Pointer(sM))
-
 	C.addSeparator()
 
 	s1 := C.CString("Clear History")
@@ -323,16 +309,6 @@ func onSettingsActivate(item *C.GtkMenuItem, data C.gpointer) {
 	if currentTray != nil {
 		select {
 		case currentTray.SettingsCh <- struct{}{}:
-		default:
-		}
-	}
-}
-
-//export onManagerActivate
-func onManagerActivate(item *C.GtkMenuItem, data C.gpointer) {
-	if currentTray != nil {
-		select {
-		case currentTray.ManagerCh <- struct{}{}:
 		default:
 		}
 	}
