@@ -37,8 +37,8 @@ static const char *MANAGER_CSS =
 "\n"
 ".clips-list { background: transparent; padding: 0 20px; }\n"
 ".clip-row {\n"
-"  background: #ffffff; border-bottom: 1px solid #f8f9fa; padding: 0 16px;\n"
-"  min-height: 60px; max-height: 60px; overflow: hidden;\n"
+"  background: #ffffff; border-bottom: 1px solid #f1f3f5; padding: 0 16px;\n"
+"  min-height: 60px;\n"
 "}\n"
 ".clip-row:hover { background: #f8f9fa; }\n"
 "\n"
@@ -288,11 +288,10 @@ void addSourceButton(const char *src) {
 
 void addClipCard(int id, const char *text, int textLen, int isImg, const char *imgPath, int isFav, const char *tags, const char *srcApp, const char *timeStr) {
     GtkWidget *row_box = gtk_event_box_new();
-    gtk_style_context_add_class(gtk_widget_get_style_context(row_box), "clip-row");
-    gtk_widget_set_size_request(row_box, -1, 60); 
 
     GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 15);
-    gtk_widget_set_valign(hbox, GTK_ALIGN_CENTER);
+    gtk_style_context_add_class(gtk_widget_get_style_context(hbox), "clip-row");
+    gtk_widget_set_size_request(hbox, -1, 60);
     gtk_container_add(GTK_CONTAINER(row_box), hbox);
 
     g_object_set_data(G_OBJECT(row_box), "clip-id", GINT_TO_POINTER(id));
@@ -322,7 +321,8 @@ void addClipCard(int id, const char *text, int textLen, int isImg, const char *i
     } else if (text) {
         GtkWidget *lbl = gtk_label_new(text);
         gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
-        gtk_label_set_lines(GTK_LABEL(lbl), 1); 
+        gtk_label_set_lines(GTK_LABEL(lbl), 1);
+        gtk_label_set_max_width_chars(GTK_LABEL(lbl), 50);
         gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "row-content-text");
         gtk_box_pack_start(GTK_BOX(pBox), lbl, TRUE, TRUE, 0);
     }
