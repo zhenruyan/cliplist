@@ -1,5 +1,5 @@
 /*
- * manager.c — Clipboard manager window (GTK3) - Compact List View
+ * manager.c - Clipboard manager window (GTK3) - Compact List View
  */
 
 #include "manager.h"
@@ -13,7 +13,7 @@ static GtkWidget *mgrSidebar      = NULL;
 static GtkWidget *tagSidebarBox   = NULL;
 static GtkWidget *sourceSidebarBox = NULL;
 static GtkWidget *mgrSearch       = NULL;
-static GtkWidget *mgrGrid         = NULL; 
+static GtkWidget *mgrGrid         = NULL;
 static GtkWidget *mgrEmpty        = NULL;
 static GtkWidget *activeBtn       = NULL;
 
@@ -109,7 +109,7 @@ static void showDetailDialog(GtkWidget *row) {
     GtkWidget *cb = gtk_button_new_with_label("Close");
     g_signal_connect_swapped(cb, "clicked", G_CALLBACK(gtk_widget_destroy), win);
     gtk_box_pack_start(GTK_BOX(bar), cb, FALSE, FALSE, 0);
-    
+
     if (!isImg && text) {
         GtkWidget *cpy = gtk_button_new_with_label("Copy Content");
         g_signal_connect_swapped(cpy, "clicked", G_CALLBACK(goCardClicked), GINT_TO_POINTER(id));
@@ -200,7 +200,7 @@ void initManagerWindow(void) {
 
     mgrWin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(mgrWin), 1100, 700);
-    
+
     GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_container_add(GTK_CONTAINER(mgrWin), hbox);
 
@@ -242,7 +242,7 @@ void initManagerWindow(void) {
 
     GtkWidget *gsw = gtk_scrolled_window_new(NULL, NULL);
     gtk_box_pack_start(GTK_BOX(main), gsw, TRUE, TRUE, 0);
-    
+
     mgrGrid = gtk_list_box_new();
     gtk_list_box_set_selection_mode(GTK_LIST_BOX(mgrGrid), GTK_SELECTION_NONE);
     gtk_style_context_add_class(gtk_widget_get_style_context(mgrGrid), "clips-list");
@@ -281,7 +281,7 @@ void addSourceButton(const char *src) {
     gtk_style_context_add_class(gtk_widget_get_style_context(btn), "cat-btn");
     gtk_style_context_add_class(gtk_widget_get_style_context(btn), "tree-item");
     g_object_set_data_full(G_OBJECT(btn), "source-name", g_strdup(src), g_free);
-    g_signal_connect(btn, "clicked", G_CALLBACK(onSourceGroupClick), NULL); 
+    g_signal_connect(btn, "clicked", G_CALLBACK(onSourceGroupClick), NULL);
     gtk_box_pack_start(GTK_BOX(sourceSidebarBox), btn, FALSE, FALSE, 0);
     gtk_widget_show_all(btn);
 }
@@ -309,8 +309,8 @@ void addClipCard(int id, const char *text, int textLen, int isImg, const char *i
     gtk_box_pack_start(GTK_BOX(hbox), fav, FALSE, FALSE, 0);
 
     GtkWidget *pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_widget_set_size_request(pBox, 400, 40); 
-    gtk_box_pack_start(GTK_BOX(hbox), pBox, FALSE, FALSE, 0);
+    gtk_widget_set_size_request(pBox, -1, 40);
+    gtk_box_pack_start(GTK_BOX(hbox), pBox, TRUE, TRUE, 0);
 
     if (isImg && imgPath) {
         GdkPixbuf *pb = gdk_pixbuf_new_from_file_at_scale(imgPath, 50, 40, TRUE, NULL);
@@ -328,7 +328,7 @@ void addClipCard(int id, const char *text, int textLen, int isImg, const char *i
     }
 
     GtkWidget *tBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_pack_start(GTK_BOX(hbox), tBox, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), tBox, FALSE, FALSE, 0);
     if(tags && tags[0]){
         char **list = g_strsplit(tags, ",", -1);
         for(int i=0; list[i] && i < 3; i++) if(list[i][0]){
