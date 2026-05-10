@@ -16,7 +16,7 @@ A lightweight clipboard history manager for Linux (X11/XFCE4).
 - **Image support** — saves screenshots and image copies
 - **Auto-paste** — selects a clip, closes popup, and pastes into the last window
 - **CLI interface** — manage clips from the terminal
-- **Auto-start** — XDG autostart support
+- **Auto-start** — XDG autostart and Systemd user service support
 
 ## Requirements
 
@@ -32,7 +32,16 @@ sudo apt install libx11-dev libxfixes-dev libsqlite3-dev \
 
 ```bash
 make build          # Build both daemon and CLI
-make install        # Install to /usr/local/bin + autostart
+make install        # Install to /usr/local/bin + autostart + systemd
+make deb            # Build .deb package (build/ directory)
+```
+
+### Enable Autostart (Systemd)
+
+Recommended way to run Cliplist on modern distributions:
+
+```bash
+systemctl --user enable --now cliplist.service
 ```
 
 ## Usage

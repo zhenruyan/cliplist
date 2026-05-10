@@ -26,12 +26,14 @@ mkdir -p "$DEB_DIR/usr/share/applications"
 mkdir -p "$DEB_DIR/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$DEB_DIR/usr/share/doc/$PACKAGE"
 mkdir -p "$DEB_DIR/etc/xdg/autostart"
+mkdir -p "$DEB_DIR/usr/lib/systemd/user"
 
 echo "==> Installing files..."
 install -m 755 cliplistd  "$DEB_DIR/usr/bin/cliplistd"
 install -m 755 cliplist   "$DEB_DIR/usr/bin/cliplist"
 install -m 644 assets/cliplist.desktop "$DEB_DIR/usr/share/applications/cliplist.desktop"
 install -m 644 assets/cliplist.desktop "$DEB_DIR/etc/xdg/autostart/cliplist.desktop"
+install -m 644 assets/cliplist.service "$DEB_DIR/usr/lib/systemd/user/cliplist.service"
 install -m 644 assets/icons/cliplist.svg "$DEB_DIR/usr/share/icons/hicolor/scalable/apps/cliplist.svg"
 install -m 644 assets/config.toml.example "$DEB_DIR/usr/share/doc/$PACKAGE/config.toml.example"
 install -m 644 README.md "$DEB_DIR/usr/share/doc/$PACKAGE/README.md"
@@ -64,7 +66,10 @@ case "$1" in
         if command -v gtk-update-icon-cache >/dev/null 2>&1; then
             gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
         fi
-        echo "Cliplist installed. Run 'cliplistd' to start the daemon."
+        echo "Cliplist installed."
+        echo "To start the daemon now, run: cliplistd"
+        echo "To enable autostart via systemd (recommended), run:"
+        echo "  systemctl --user enable --now cliplist.service"
         echo "Run 'cliplist settings' or click Settings in the tray menu to configure."
         ;;
 esac
